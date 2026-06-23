@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dialog';
 import { useProjectStore } from '@/store/projectStore';
 import { codesIpc, CodeTreeNode } from '@/ipc/codes';
+import { CodeNodeMeta } from './CodeTree';
 import { toast } from 'sonner';
 
 const PRESET_COLORS = [
@@ -19,7 +20,7 @@ const PRESET_COLORS = [
 interface CodeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  codeToEdit?: CodeTreeNode;
+  codeToEdit?: CodeNodeMeta;
   initialParentId?: string;
 }
 
