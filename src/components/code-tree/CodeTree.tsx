@@ -35,6 +35,13 @@ function CodeMemoPanel({ code, onClose }: { code: CodeTreeNode, onClose: () => v
     };
   }, []);
 
+  // Cancel pending save when memo panel is dismissed
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  });
+
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value; // capture before timeout (ACTION_PLAN B4)
     setContent(value);
