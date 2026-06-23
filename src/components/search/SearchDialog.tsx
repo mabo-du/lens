@@ -124,7 +124,6 @@ export function SearchDialog() {
         <div className="flex items-center px-4 py-3 border-b border-slate-200 bg-white">
           <SearchIcon className="w-5 h-5 text-slate-400 mr-3" />
           <input
-            autoFocus
             type="text"
             className="flex-1 bg-transparent border-none outline-none text-slate-800 placeholder-slate-400 text-base"
             placeholder="Search documents and memos..."
