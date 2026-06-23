@@ -36,7 +36,6 @@ export const CsvExporter: ExportPlugin = {
       const codeName = codeMap.get(ann.codeId) || 'Unknown Code';
       const memo = memoMap.get(ann.id) || '';
       
-      // Extract text segment
       const segment = (doc.plainText ?? '').substring(ann.startChar, ann.endChar);
       
       lines.push([

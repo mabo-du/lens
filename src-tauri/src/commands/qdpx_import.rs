@@ -53,8 +53,6 @@ pub async fn qdpx_import_internal(
 
     let root = doc.root_element();
 
-    // ---- Begin transaction ----
-    // For replace mode, backup the database first so undo is possible
     if mode == "replace" {
         if let Some(folder) = project_folder {
             // Force a WAL checkpoint so all data is in the main DB file
@@ -82,7 +80,6 @@ pub async fn qdpx_import_internal(
 
     let mut tx = pool.begin().await.map_err(|e| format!("DB error: {}", e))?;
 
-    // Get the project ID
     let project_id: String = {
         let row: (String,) = sqlx::query_as("SELECT id FROM project LIMIT 1")
             .fetch_one(&mut *tx)
@@ -119,7 +116,6 @@ pub async fn qdpx_import_internal(
             .map_err(|e| format!("{}", e))?;
     }
 
-    // ---- Import Codes (recursive) ----
     let mut code_count = 0u32;
 
     // Find CodeBook > Codes
@@ -209,7 +205,6 @@ pub async fn qdpx_import_internal(
         }
     }
 
-    // ---- Import Documents (TextSource) ----
     let mut doc_count = 0u32;
     let mut sel_count = 0u32;
 
@@ -266,7 +261,6 @@ pub async fn qdpx_import_internal(
 
             doc_count += 1;
 
-            // ---- Import selections for this source ----
             let selections: Vec<_> = source
                 .children()
                 .filter(|c| c.is_element() && c.has_tag_name("PlainTextSelection"))
@@ -332,7 +326,6 @@ pub async fn qdpx_import_internal(
         }
     }
 
-    // ---- Commit ----
     tx.commit()
         .await
         .map_err(|e| format!("Failed to commit import: {}", e))?;

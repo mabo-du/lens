@@ -18,7 +18,6 @@ pub async fn search_query_internal(
     query: String,
     code_id_filter: Option<String>,
 ) -> Result<Vec<SearchResult>, String> {
-    // Validate input
     let trimmed = query.trim();
     if trimmed.is_empty() {
         return Err("Search query must not be empty".to_string());

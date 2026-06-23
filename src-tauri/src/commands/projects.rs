@@ -98,7 +98,6 @@ pub async fn projects_create_internal(
     let mut project_dir = PathBuf::from(&target_dir);
     project_dir.push(&name);
 
-    // Create folder structure
     std::fs::create_dir_all(&project_dir)
         .map_err(|e| format!("Failed to create project directory: {}", e))?;
     let assets_dir = project_dir.join("assets");
@@ -114,13 +113,11 @@ pub async fn projects_create_internal(
 
     let db_path = project_dir.join("project.qdaproj");
 
-    // Initialize DB and run migrations
     let pool = crate::db::init_db(&db_path, encryption_key.as_deref()).await?;
     *state.encryption_key.write().await = encryption_key;
 
     let id = Uuid::new_v4().to_string();
 
-    // Create project row
     sqlx::query("INSERT INTO project (id, name, description) VALUES (?, ?, ?)")
         .bind(&id)
         .bind(&name)
@@ -141,7 +138,6 @@ pub async fn projects_create_internal(
     .await
     .map_err(|e| format!("Failed to fetch created project: {}", e))?;
 
-    // Update global state
     *state.db.write().await = Some(pool);
     *state.project_folder.write().await = Some(project_dir);
 
@@ -216,7 +212,6 @@ pub async fn projects_rename(
     let pool = state.db.read().await;
     let pool = pool.as_ref().ok_or("No project open")?;
 
-    // Get current project
     let project = sqlx::query_as::<_, Project>(
         "SELECT id, name, description, created_at as createdAt, updated_at as updatedAt FROM project LIMIT 1"
     )
@@ -224,7 +219,6 @@ pub async fn projects_rename(
     .await
     .map_err(|e| format!("Failed to read project: {}", e))?;
 
-    // Update name
     sqlx::query("UPDATE project SET name = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?")
         .bind(&name)
         .bind(&project.id)
@@ -232,7 +226,6 @@ pub async fn projects_rename(
         .await
         .map_err(|e| format!("Failed to rename project: {}", e))?;
 
-    // Return updated project
     let updated = sqlx::query_as::<_, Project>(
         "SELECT id, name, description, created_at as createdAt, updated_at as updatedAt FROM project WHERE id = ?"
     )

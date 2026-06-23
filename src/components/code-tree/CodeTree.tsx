@@ -11,7 +11,6 @@ import { Plus, Trash2, Edit2, FileText } from 'lucide-react';
 import { memosIpc } from '@/ipc/memos';
 import { toast } from 'sonner';
 
-/** Common code node fields used by context menu callbacks (avoids double type cast). */
 export interface CodeNodeMeta {
   id: string;
   projectId: string;
@@ -128,6 +127,11 @@ function CodeNode({ node, style, dragHandle }: NodeRendererProps<ArboristNode>) 
   return (
     <ContextMenu>
       <ContextMenuTrigger className="block w-full">
+        {/* We use <div role=button> (not <button>) here so react-arborist's
+            drag-handle ref stays attached to a single non-nested element.
+            Wrapping a native <button> inside ContextMenuTrigger would yield
+            invalid nested-button HTML and trigger double-keyboard activation. */}
+        {/* eslint-disable-next-line jsx-a11y/prefer-tag-over-role */}
         <div
           style={style}
           ref={dragHandle}

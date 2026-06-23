@@ -44,7 +44,6 @@ function TopNav({ onJournalOpen, onCloseProject, onSettingsOpen, onHelpOpen, onI
     try {
       const updated = await projectsIpc.rename(trimmed);
       setActiveProject(updated);
-      // Update the recentProjects entry with the new name
       const uiState = useUiStore.getState();
       const rp = uiState.recentProjects.find(p => p.name === activeProject?.name);
       if (rp) {
