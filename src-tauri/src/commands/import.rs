@@ -14,6 +14,12 @@ use crate::import::{normalise, txt, pdf};
 /// version declared in `package.json`.
 const MAMMOTH_EXTRACTOR_ID: &str = "mammoth-1.12.0";
 
+/// Extractor identifier for PDF imports. The version is baked in at build
+/// time via `build.rs` reading `pdfplumber.__version__`; falls back to
+/// "pdfplumber-unknown" if python3 isn't available at build time.
+const PDFPLUMBER_EXTRACTOR_ID: &str =
+    concat!("pdfplumber-", env!("PDFPLUMBER_VERSION"));
+
 #[derive(Serialize, Deserialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct Document {
@@ -79,7 +85,7 @@ pub struct Document {
     let extractor_id = match file_format.as_str() {
         "txt" => "plain-text-1.0",
         "docx" => MAMMOTH_EXTRACTOR_ID,
-        "pdf" => "pdfplumber-sidecar",
+        "pdf" => PDFPLUMBER_EXTRACTOR_ID,
         _ => unreachable!("extractor_id: format {} should have been rejected above", file_format),
     };
 
@@ -88,20 +94,6 @@ pub struct Document {
     let text_hash = normalise::compute_hash(&normalised);
     let word_count = normalise::compute_word_count(&normalised);
 
-    // Check for duplicates
-    let duplicate_exists: Option<i32> = sqlx::query_scalar(
-        "SELECT 1 FROM document WHERE text_hash = ? AND project_id = ?"
-    )
-    .bind(&text_hash)
-    .bind(&project_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| format!("Failed to check for duplicates: {}", e))?;
-
-    if duplicate_exists.is_some() {
-        return Err("This document has already been imported. To import an updated version, add it as a separate document entry.".to_string());
-    }
-
     let id = Uuid::new_v4().to_string();
     let file_name = PathBuf::from(&file_path)
         .file_name()
@@ -109,12 +101,31 @@ pub struct Document {
         .unwrap_or("Untitled")
         .to_string();
 
-    // Get max sort_order
+    // Wrap duplicate check + INSERT in a transaction. Together with the
+    // UNIQUE(project_id, text_hash) index (migration 02), this prevents
+    // concurrent imports from inserting duplicate rows (ACTION_PLAN §2.3).
+    let mut tx = pool.begin().await.map_err(|e| format!("Failed to begin transaction: {}", e))?;
+
+    let duplicate_exists: Option<i32> = sqlx::query_scalar(
+        "SELECT 1 FROM document WHERE text_hash = ? AND project_id = ?"
+    )
+    .bind(&text_hash)
+    .bind(&project_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| format!("Failed to check for duplicates: {}", e))?;
+
+    if duplicate_exists.is_some() {
+        return Err("This document has already been imported. To import an updated version, add it as a separate document entry.".to_string());
+    }
+
+    // Get max sort_order (inside the transaction so sort_order is
+    // consistent with the INSERT).
     let max_sort: Option<i32> = sqlx::query_scalar(
         "SELECT MAX(sort_order) FROM document WHERE project_id = ?"
     )
     .bind(&project_id)
-    .fetch_optional(pool)
+    .fetch_optional(&mut *tx)
     .await
     .map_err(|e| format!("Failed to fetch sort_order: {}", e))?;
 
@@ -135,9 +146,11 @@ pub struct Document {
     .bind(&extractor_id)
     .bind(&word_count)
     .bind(&sort_order)
-    .execute(pool)
+    .execute(&mut *tx)
     .await
     .map_err(|e| format!("Failed to insert document: {}", e))?;
+
+    tx.commit().await.map_err(|e| format!("Failed to commit transaction: {}", e))?;
 
     // Copy original file to assets/ for REFI-QDA export
     if let Ok(folder_guard) = state.project_folder.try_read() {

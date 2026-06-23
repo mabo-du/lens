@@ -847,3 +847,97 @@ async fn local_user_auto_created_before_export() {
         payload.local_user.id
     );
 }
+
+// ---------------------------------------------------------------------------
+// Phase 2.1 — Closure-table invariant test (ACTION_PLAN §Part 5)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn closure_table_invariant_3_level_hierarchy() {
+    use crate::commands::codes::codes_move_internal;
+
+    let (state, _temp_dir) = setup_test_state().await;
+
+    let project = projects_create_internal(
+        &state,
+        "Closure Test".to_string(),
+        None,
+        _temp_dir.path().to_string_lossy().to_string(),
+    )
+    .await
+    .expect("Failed to create project");
+
+    // Build A → B → C (3-level hierarchy)
+    let a = codes_create_internal(&state, project.id.clone(), None, "A".to_string(), Some("#111111".to_string()))
+        .await.expect("Failed to create A");
+    let b = codes_create_internal(&state, project.id.clone(), Some(a.id.clone()), "B".to_string(), Some("#222222".to_string()))
+        .await.expect("Failed to create B");
+    let c = codes_create_internal(&state, project.id.clone(), Some(b.id.clone()), "C".to_string(), Some("#333333".to_string()))
+        .await.expect("Failed to create C");
+
+    let pool_guard = state.db.read().await;
+    let pool = pool_guard.as_ref().expect("No DB");
+
+    // Expected closure rows after A → B → C:
+    //   (A,A,0) (B,B,0) (C,C,0) — self-references
+    //   (A,B,1) (B,C,1)         — direct edges
+    //   (A,C,2)                 — transitive
+    let rows: Vec<(String, String, i32)> = sqlx::query_as(
+        "SELECT ancestor, descendant, depth FROM code_closure ORDER BY ancestor, depth"
+    )
+    .fetch_all(pool)
+    .await
+    .expect("Failed to query closure table");
+
+    assert_eq!(rows.len(), 6, "Should have 6 closure rows for 3-node chain");
+
+    // Verify each expected row exists
+    let expected = vec![
+        (a.id.clone(), a.id.clone(), 0),
+        (a.id.clone(), b.id.clone(), 1),
+        (a.id.clone(), c.id.clone(), 2),
+        (b.id.clone(), b.id.clone(), 0),
+        (b.id.clone(), c.id.clone(), 1),
+        (c.id.clone(), c.id.clone(), 0),
+    ];
+    for (ancestor, descendant, depth) in &expected {
+        let found = rows.iter().any(|(ra, rd, rdepth)| ra == ancestor && rd == descendant && rdepth == depth);
+        assert!(found, "Expected closure row ({}, {}, {}), got rows: {:?}", ancestor, descendant, depth, rows);
+    }
+    drop(pool_guard);
+
+    // Create new root X, move B under it
+    let x = codes_create_internal(&state, project.id.clone(), None, "X".to_string(), Some("#999999".to_string()))
+        .await.expect("Failed to create X");
+
+    codes_move_internal(&state, b.id.clone(), Some(x.id.clone()))
+        .await
+        .expect("Failed to move B under X");
+
+    let pool_guard = state.db.read().await;
+    let pool = pool_guard.as_ref().expect("No DB");
+    let rows_after: Vec<(String, String, i32)> = sqlx::query_as(
+        "SELECT ancestor, descendant, depth FROM code_closure ORDER BY ancestor, depth"
+    )
+    .fetch_all(pool)
+    .await
+    .expect("Failed to query closure table after move");
+
+    // After move: A is isolated (self only), B→C under X
+    // Expected: (A,A,0) (X,X,0) (B,B,0) (C,C,0) (X,B,1) (X,C,2) (B,C,1) = 7 rows
+    assert_eq!(rows_after.len(), 7, "Should have 7 closure rows after moving B under X");
+
+    // No stale A→B or A→C rows
+    let stale_ab = rows_after.iter().any(|(ra, rd, _)| ra == &a.id && rd == &b.id);
+    let stale_ac = rows_after.iter().any(|(ra, rd, _)| ra == &a.id && rd == &c.id);
+    assert!(!stale_ab, "Stale A→B row should not exist after move");
+    assert!(!stale_ac, "Stale A→C row should not exist after move");
+
+    // New links through X
+    let xb = rows_after.iter().any(|(ra, rd, d)| ra == &x.id && rd == &b.id && *d == 1);
+    let xc = rows_after.iter().any(|(ra, rd, d)| ra == &x.id && rd == &c.id && *d == 2);
+    let bc = rows_after.iter().any(|(ra, rd, d)| ra == &b.id && rd == &c.id && *d == 1);
+    assert!(xb, "X→B (depth 1) should exist");
+    assert!(xc, "X→C (depth 2) should exist");
+    assert!(bc, "B→C (depth 1) should still exist");
+}
