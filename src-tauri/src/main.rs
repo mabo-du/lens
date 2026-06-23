@@ -24,6 +24,7 @@ fn main() {
             commands::projects::projects_create,
             commands::projects::projects_open,
             commands::projects::projects_close,
+            commands::projects::projects_rename,
             commands::codes::codes_create,
             commands::codes::codes_get_tree,
             commands::codes::codes_move,

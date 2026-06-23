@@ -185,6 +185,45 @@ pub async fn projects_open(
 }
 
 #[command]
+pub async fn projects_rename(
+    _app: AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<Project, String> {
+    validate_project_name(&name)?;
+
+    let pool = state.db.read().await;
+    let pool = pool.as_ref().ok_or("No project open")?;
+
+    // Get current project
+    let project = sqlx::query_as::<_, Project>(
+        "SELECT id, name, description, created_at as createdAt, updated_at as updatedAt FROM project LIMIT 1"
+    )
+    .fetch_one(pool)
+    .await
+    .map_err(|e| format!("Failed to read project: {}", e))?;
+
+    // Update name
+    sqlx::query("UPDATE project SET name = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?")
+        .bind(&name)
+        .bind(&project.id)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Failed to rename project: {}", e))?;
+
+    // Return updated project
+    let updated = sqlx::query_as::<_, Project>(
+        "SELECT id, name, description, created_at as createdAt, updated_at as updatedAt FROM project WHERE id = ?"
+    )
+    .bind(&project.id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| format!("Failed to read project: {}", e))?;
+
+    Ok(updated)
+}
+
+#[command]
 pub async fn projects_close(state: State<'_, AppState>) -> Result<(), String> {
     *state.db.write().await = None;
     *state.project_folder.write().await = None;

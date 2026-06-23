@@ -8,6 +8,8 @@ import { codesIpc } from "./ipc/codes";
 import { memosIpc } from "./ipc/memos";
 import { projectsIpc } from "./ipc/projects";
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { useUiStore } from './store/uiStore';
+import { FolderOpen, Plus, X } from 'lucide-react';
 import "./App.css";
 
 function App() {
@@ -17,18 +19,27 @@ function App() {
   const setCodes = useProjectStore(s => s.setCodes);
   const setMemos = useProjectStore(s => s.setMemos);
 
-  const handleOpenProject = async () => {
-    const selected = await openDialog({ directory: true });
+  const addRecentProject = useUiStore(s => s.addRecentProject);
+  const recentProjects = useUiStore(s => s.recentProjects);
+  const removeRecentProject = useUiStore(s => s.removeRecentProject);
+
+  const loadProjectData = async (proj: { id: string; name: string; description: string | null; createdAt: string; updatedAt: string }, folderPath: string) => {
+    setActiveProject(proj);
+    const docs = await documentsIpc.list(proj.id);
+    setDocuments(docs);
+    const codesList = await codesIpc.getTree(proj.id);
+    setCodes(codesList);
+    const memosList = await memosIpc.listByProject(proj.id);
+    setMemos(memosList);
+    addRecentProject({ path: folderPath, name: proj.name, openedAt: new Date().toISOString() });
+  };
+
+  const handleOpenProject = async (folderPath?: string) => {
+    const selected = folderPath || await openDialog({ directory: true });
     if (selected && typeof selected === 'string') {
       try {
         const proj = await projectsIpc.open(selected);
-        setActiveProject(proj);
-        const docs = await documentsIpc.list(proj.id);
-        setDocuments(docs);
-        const codesList = await codesIpc.getTree(proj.id);
-        setCodes(codesList);
-        const memosList = await memosIpc.listByProject(proj.id);
-        setMemos(memosList);
+        await loadProjectData(proj, selected);
       } catch (e) {
         toast.error("Failed to open project: " + e);
       }
@@ -40,10 +51,12 @@ function App() {
     if (selected && typeof selected === 'string') {
       try {
         const proj = await projectsIpc.create("New Project", "", selected);
+        const folderPath = `${selected}/${proj.name}`;
         setActiveProject(proj);
         setDocuments([]);
         setCodes([]);
         setMemos([]);
+        addRecentProject({ path: folderPath, name: proj.name, openedAt: new Date().toISOString() });
       } catch (e) {
         toast.error("Failed to create project: " + e);
       }
@@ -64,13 +77,41 @@ function App() {
             <p className="text-slate-500 mt-2 text-sm">Qualitative Data Analysis</p>
           </div>
           <div className="flex flex-col space-y-3 mt-6">
-            <button onClick={handleCreateProject} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-              New Project
+            <button onClick={handleCreateProject} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center justify-center space-x-2">
+              <Plus className="w-4 h-4" />
+              <span>New Project</span>
             </button>
-            <button onClick={handleOpenProject} className="px-4 py-2 bg-slate-200 text-slate-800 rounded hover:bg-slate-300">
-              Open Project
+            <button onClick={() => handleOpenProject()} className="px-4 py-2 bg-slate-200 text-slate-800 rounded hover:bg-slate-300 flex items-center justify-center space-x-2">
+              <FolderOpen className="w-4 h-4" />
+              <span>Open Project</span>
             </button>
           </div>
+          {recentProjects.length > 0 && (
+            <div className="mt-6 pt-4 border-t border-slate-200">
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Recent Projects</h3>
+              <div className="space-y-1">
+                {recentProjects.map(rp => (
+                  <div key={rp.path} className="group flex items-center">
+                    <button
+                      onClick={() => handleOpenProject(rp.path)}
+                      className="flex-1 text-left px-3 py-2 rounded text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-800 transition-colors truncate"
+                      title={rp.path}
+                    >
+                      <div className="font-medium truncate">{rp.name}</div>
+                      <div className="text-xs text-slate-400 truncate">{rp.path}</div>
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); removeRecentProject(rp.path); }}
+                      className="px-2 py-1 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all"
+                      title="Remove from recent"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <Toaster />
         </div>
       </div>

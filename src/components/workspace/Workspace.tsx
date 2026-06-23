@@ -9,8 +9,8 @@ import { FuzzyCodePicker } from '../editor/FuzzyCodePicker';
 import { ProjectJournalDialog } from '../memos/ProjectJournalDialog';
 import { SearchDialog } from '../search/SearchDialog';
 import { useProjectStore } from '@/store/projectStore';
-import { Book, Download, LogOut } from 'lucide-react';
-import React, { useState, ReactNode } from 'react';
+import { Book, Download, LogOut, Pencil } from 'lucide-react';
+import React, { useState, ReactNode, useRef, useEffect } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
 import { save } from '@tauri-apps/plugin-dialog';
@@ -21,7 +21,41 @@ import { projectsIpc } from '@/ipc/projects';
 
 function TopNav({ onJournalOpen, onCloseProject }: { onJournalOpen: () => void; onCloseProject: () => void }) {
   const activeProject = useProjectStore(s => s.activeProject);
+  const setActiveProject = useProjectStore(s => s.setActiveProject);
   const [exporting, setExporting] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (renaming && renameInputRef.current) renameInputRef.current.focus();
+  }, [renaming]);
+
+  const handleRename = async () => {
+    const trimmed = renameValue.trim();
+    if (!trimmed || trimmed === activeProject?.name) {
+      setRenaming(false);
+      return;
+    }
+    try {
+      const updated = await projectsIpc.rename(trimmed);
+      setActiveProject(updated);
+      // Update the recentProjects entry with the new name
+      const uiState = useUiStore.getState();
+      const rp = uiState.recentProjects.find(p => p.name === activeProject?.name);
+      if (rp) {
+        uiState.addRecentProject({ ...rp, name: updated.name, openedAt: new Date().toISOString() });
+      }
+    } catch (e) {
+      toast.error(`Failed to rename project: ${e}`);
+    }
+    setRenaming(false);
+  };
+
+  const startRename = () => {
+    setRenameValue(activeProject?.name || '');
+    setRenaming(true);
+  };
   
   const handleExport = async (pluginId: string) => {
     if (!activeProject) return;
@@ -59,7 +93,28 @@ function TopNav({ onJournalOpen, onCloseProject }: { onJournalOpen: () => void; 
 
   return (
     <div className="h-12 bg-slate-800 text-slate-200 flex items-center justify-between px-4 shrink-0">
-      <div className="font-semibold text-sm tracking-wide">{activeProject?.name || 'LENS'}</div>
+      {renaming && activeProject ? (
+        <form onSubmit={(e) => { e.preventDefault(); handleRename(); }} className="flex items-center space-x-1">
+          <input
+            ref={renameInputRef}
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onBlur={handleRename}
+            onKeyDown={(e) => { if (e.key === 'Escape') setRenaming(false); }}
+            className="bg-slate-700 text-slate-200 px-2 py-0.5 rounded text-sm font-semibold outline-none ring-1 ring-blue-500 w-48"
+            maxLength={64}
+          />
+        </form>
+      ) : (
+        <button
+          onClick={startRename}
+          className="font-semibold text-sm tracking-wide hover:text-blue-300 transition-colors flex items-center space-x-1 group"
+          title="Click to rename project"
+        >
+          <span>{activeProject?.name || 'LENS'}</span>
+          <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" />
+        </button>
+      )}
       <div className="flex items-center space-x-2">
         {activeProject && (
           <Popover>
