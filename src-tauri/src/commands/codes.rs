@@ -300,11 +300,13 @@ pub async fn codes_update(
     let pool_guard = state.db.read().await;
     let pool = pool_guard.as_ref().ok_or("No project open")?;
 
+    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+
     if let Some(n) = &name {
         sqlx::query("UPDATE code SET name = ? WHERE id = ?")
             .bind(n)
             .bind(&id)
-            .execute(pool)
+            .execute(&mut *tx)
             .await
             .map_err(|e| e.to_string())?;
     }
@@ -315,7 +317,7 @@ pub async fn codes_update(
         sqlx::query("UPDATE code SET color = ? WHERE id = ?")
             .bind(c)
             .bind(&id)
-            .execute(pool)
+            .execute(&mut *tx)
             .await
             .map_err(|e| e.to_string())?;
     }
@@ -323,10 +325,12 @@ pub async fn codes_update(
         sqlx::query("UPDATE code SET description = ? WHERE id = ?")
             .bind(d)
             .bind(&id)
-            .execute(pool)
+            .execute(&mut *tx)
             .await
             .map_err(|e| e.to_string())?;
     }
+
+    tx.commit().await.map_err(|e| e.to_string())?;
 
     let code = sqlx::query_as::<_, Code>(
         "SELECT id, project_id, name, color, description, created_by, created_at as createdAt FROM code WHERE id = ?"
