@@ -8,6 +8,7 @@ import { readFile } from '@tauri-apps/plugin-fs';
 // DOCX extraction via Mammoth.js — keep version in sync with
 // MAMMOTH_EXTRACTOR_ID in src-tauri/src/commands/import.rs.
 import * as mammoth from 'mammoth';
+import { toast } from 'sonner';
 
 export function DocumentList() {
   const documents = useProjectStore(s => s.documents);
@@ -57,7 +58,7 @@ export function DocumentList() {
         }
       } catch (e) {
         console.error(`Failed to import ${filePath}:`, e);
-        alert(`Failed to import ${filePath}: ${e}`);
+        toast.error(`Failed to import ${filePath}: ${e}`);
       }
     }
 
