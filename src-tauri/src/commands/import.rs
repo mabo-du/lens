@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use sqlx::Executor;
 use tauri::{AppHandle, State, command};
 use uuid::Uuid;
 use std::path::PathBuf;
@@ -143,9 +142,9 @@ pub struct Document {
     .bind(&file_format)
     .bind(&normalised)
     .bind(&text_hash)
-    .bind(&extractor_id)
-    .bind(&word_count)
-    .bind(&sort_order)
+    .bind(extractor_id)
+    .bind(word_count)
+    .bind(sort_order)
     .execute(&mut *tx)
     .await
     .map_err(|e| format!("Failed to insert document: {}", e))?;

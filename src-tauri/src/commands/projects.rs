@@ -148,7 +148,7 @@ pub async fn projects_create(
 
 #[command]
 pub async fn projects_open(
-    app: AppHandle,
+    _app: AppHandle,
     state: State<'_, AppState>,
     project_dir: String,
 ) -> Result<Project, String> {

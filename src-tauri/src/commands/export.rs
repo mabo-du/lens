@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, State, command};
+use serde::Serialize;
+use tauri::{State, command};
 use super::projects::{AppState, Project};
 use super::import::Document;
 use super::codes::CodeTreeNode;

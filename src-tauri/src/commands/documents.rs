@@ -1,4 +1,3 @@
-use sqlx::Executor;
 use tauri::{AppHandle, State, command};
 use super::projects::AppState;
 use super::import::Document;
