@@ -1543,3 +1543,178 @@ async fn qdpx_import_rejects_corrupted_zip() {
 
     drop(pool_guard);
 }
+
+#[tokio::test]
+async fn qdpx_import_undo_restores_previous_data() {
+    use crate::commands::qdpx_import::qdpx_import_internal;
+    use crate::commands::qdpx_import::qdpx_import_undo_internal;
+    use crate::commands::codes::codes_create_internal;
+    use std::io::Write;
+
+    let (state, _temp_dir) = setup_test_state().await;
+
+    let project = projects_create_internal(
+        &state,
+        "QDPX Undo Test".to_string(),
+        None,
+        _temp_dir.path().to_string_lossy().to_string(),
+        None,
+    )
+    .await
+    .expect("Failed to create project");
+
+    let _user_id = seed_local_user(&state).await;
+
+    // Create a document and code manually first
+    let _doc = documents_import_internal(
+        None,
+        &state,
+        project.id.clone(),
+        "/tmp/pre-import.txt".to_string(),
+        "txt".to_string(),
+        Some("This data should survive undo.".to_string()),
+    )
+    .await
+    .expect("Failed to import pre-existing document");
+
+    let _code = codes_create_internal(
+        &state,
+        project.id.clone(),
+        None,
+        "Pre-Import Code".to_string(),
+        Some("#111111".to_string()),
+    )
+    .await
+    .expect("Failed to create pre-existing code");
+
+    // Verify pre-import state
+    {
+        let pool_guard = state.db.read().await;
+        let pool = pool_guard.as_ref().expect("No DB");
+        let doc_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM document")
+            .fetch_one(pool)
+            .await
+            .unwrap();
+        assert_eq!(doc_count, 1);
+        let code_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM code")
+            .fetch_one(pool)
+            .await
+            .unwrap();
+        assert_eq!(code_count, 1);
+    }
+
+    // Build a .qdpx fixture for replace import
+    let qdpx_path = _temp_dir.path().join("undo_fixture.qdpx");
+    let file = std::fs::File::create(&qdpx_path).expect("Failed to create test QDPX");
+    let mut zip = zip::ZipWriter::new(file);
+
+    zip.start_file(
+        "Sources/new.txt",
+        zip::write::FileOptions::<()>::default().compression_method(zip::CompressionMethod::Deflated),
+    )
+    .unwrap();
+    zip.write_all(b"Imported replacement text.").unwrap();
+
+    let xml = r##"<?xml version="1.0" encoding="UTF-8"?>
+<Project xmlns="urn:QDA-XML:project:1.0">
+  <CodeBook>
+    <Codes>
+      <Code guid="code-undo-1" name="Imported Code" color="#00FF00" />
+    </Codes>
+  </CodeBook>
+  <Sources>
+    <TextSource guid="doc-undo-1" name="imported.txt" plainTextPath="new.txt">
+    </TextSource>
+  </Sources>
+</Project>"##;
+
+    zip.start_file(
+        "project.qde",
+        zip::write::FileOptions::<()>::default().compression_method(zip::CompressionMethod::Deflated),
+    )
+    .unwrap();
+    zip.write_all(xml.as_bytes()).unwrap();
+    zip.finish().unwrap();
+
+    // Import in replace mode (creates backup via project_folder)
+    {
+        let pool_guard = state.db.read().await;
+        let pool = pool_guard.as_ref().expect("No DB");
+        let folder_guard = state.project_folder.read().await;
+        let project_folder = folder_guard.as_deref();
+        let result = qdpx_import_internal(
+            pool,
+            &qdpx_path.to_string_lossy(),
+            "replace",
+            project_folder,
+        )
+        .await
+        .expect("Import should succeed");
+        assert!(result.contains("1 document"), "Result: {}", result);
+    }
+
+    // Verify replace took effect: old data gone, new data present
+    {
+        let pool_guard = state.db.read().await;
+        let pool = pool_guard.as_ref().expect("No DB");
+
+        let old_doc_exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM document WHERE title = 'pre-import.txt')",
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap();
+        assert!(!old_doc_exists, "Old doc should be gone after replace");
+
+        let imported_doc_title: String =
+            sqlx::query_scalar("SELECT title FROM document LIMIT 1")
+                .fetch_one(pool)
+                .await
+                .unwrap();
+        assert_eq!(imported_doc_title, "imported.txt");
+    }
+
+    // Now undo the import
+    qdpx_import_undo_internal(&state)
+        .await
+        .expect("Undo should succeed");
+
+    // Verify original data is restored
+    {
+        let pool_guard = state.db.read().await;
+        let pool = pool_guard.as_ref().expect("No DB");
+
+        let old_doc_exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM document WHERE title = 'pre-import.txt')",
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap();
+        assert!(old_doc_exists, "Original document should be restored after undo");
+
+        let old_code_exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM code WHERE name = 'Pre-Import Code')",
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap();
+        assert!(old_code_exists, "Original code should be restored after undo");
+
+        // Imported data should no longer exist
+        let imported_doc_exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM document WHERE title = 'imported.txt')",
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap();
+        assert!(!imported_doc_exists, "Imported document should not exist after undo");
+
+        let imported_code_exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM code WHERE name = 'Imported Code')",
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap();
+        assert!(!imported_code_exists, "Imported code should not exist after undo");
+    }
+}

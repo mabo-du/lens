@@ -57,6 +57,10 @@ pub async fn qdpx_import_internal(
     // For replace mode, backup the database first so undo is possible
     if mode == "replace" {
         if let Some(folder) = project_folder {
+            // Force a WAL checkpoint so all data is in the main DB file
+            let _ = sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
+                .execute(pool)
+                .await;
             // Find the actual .qdaproj file in the project folder
             let backup_path = folder.join(".qdpx-backup");
             let db_path: Option<std::path::PathBuf> = std::fs::read_dir(folder)
@@ -372,10 +376,8 @@ pub async fn qdpx_import(
 }
 
 /// Restore the database from the backup created before a replace-mode import.
-#[tauri::command]
-pub async fn qdpx_import_undo(
-    _app: tauri::AppHandle,
-    state: tauri::State<'_, super::projects::AppState>,
+pub async fn qdpx_import_undo_internal(
+    state: &super::projects::AppState,
 ) -> Result<String, String> {
     let folder = state.project_folder.read().await;
     let folder = folder.as_ref().ok_or("No project open")?;
@@ -394,21 +396,27 @@ pub async fn qdpx_import_undo(
         .ok_or("No .qdaproj database file found in project folder")?;
 
     // Close the current pool before replacing the file
-    {
-        let mut db = state.db.write().await;
-        db.take(); // drop the pool
+    if let Some(pool) = state.db.write().await.take() {
+        pool.close().await;
     }
 
     std::fs::copy(&backup_path, &db_path)
         .map_err(|e| format!("Failed to restore backup: {}", e))?;
 
-    // Remove the backup
     std::fs::remove_file(&backup_path).ok();
 
-    // Re-open the database
     let encryption_key = state.encryption_key.read().await.clone();
     let pool = crate::db::init_db(&db_path, encryption_key.as_deref()).await?;
     *state.db.write().await = Some(pool);
 
     Ok("Import undone. Previous data restored.".to_string())
+}
+
+/// Restore the database from the backup created before a replace-mode import.
+#[tauri::command]
+pub async fn qdpx_import_undo(
+    _app: tauri::AppHandle,
+    state: tauri::State<'_, super::projects::AppState>,
+) -> Result<String, String> {
+    qdpx_import_undo_internal(&state).await
 }
