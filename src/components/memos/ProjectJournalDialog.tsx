@@ -29,6 +29,13 @@ export function ProjectJournalDialog({ open, onOpenChange }: { open: boolean, on
     };
   }, []);
 
+  // Cancel pending save when dialog closes
+  useEffect(() => {
+    if (!open) {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    }
+  }, [open]);
+
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value; // capture before timeout (ACTION_PLAN B4)
     setContent(value);
