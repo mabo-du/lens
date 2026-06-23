@@ -1412,3 +1412,134 @@ async fn qdpx_import_merge_mode_preserves_existing_data() {
 
     drop(pool_guard);
 }
+
+#[tokio::test]
+async fn qdpx_import_rejects_missing_project_qde() {
+    use crate::commands::qdpx_import::qdpx_import_internal;
+    use std::io::Write;
+
+    let (state, _temp_dir) = setup_test_state().await;
+
+    let project = projects_create_internal(
+        &state,
+        "QDPX Missing QDE Test".to_string(),
+        None,
+        _temp_dir.path().to_string_lossy().to_string(),
+        None,
+    )
+    .await
+    .expect("Failed to create project");
+
+    // Build a ZIP without project.qde
+    let qdpx_path = _temp_dir.path().join("no_qde.qdpx");
+    let file = std::fs::File::create(&qdpx_path).expect("Failed to create test QDPX");
+    let mut zip = zip::ZipWriter::new(file);
+
+    zip.start_file(
+        "Sources/notes.txt",
+        zip::write::FileOptions::<()>::default().compression_method(zip::CompressionMethod::Deflated),
+    )
+    .unwrap();
+    zip.write_all(b"Some text without a project.qde.").unwrap();
+    zip.finish().unwrap();
+
+    let pool_guard = state.db.read().await;
+    let pool = pool_guard.as_ref().expect("No DB");
+
+    let err = qdpx_import_internal(pool, &qdpx_path.to_string_lossy(), "merge")
+        .await
+        .expect_err("Should reject ZIP without project.qde");
+
+    assert!(
+        err.contains("project.qde not found"),
+        "Error should mention missing project.qde, got: {}",
+        err
+    );
+
+    drop(pool_guard);
+}
+
+#[tokio::test]
+async fn qdpx_import_rejects_malformed_xml() {
+    use crate::commands::qdpx_import::qdpx_import_internal;
+    use std::io::Write;
+
+    let (state, _temp_dir) = setup_test_state().await;
+
+    let project = projects_create_internal(
+        &state,
+        "QDPX Bad XML Test".to_string(),
+        None,
+        _temp_dir.path().to_string_lossy().to_string(),
+        None,
+    )
+    .await
+    .expect("Failed to create project");
+
+    // Build a ZIP with malformed XML
+    let qdpx_path = _temp_dir.path().join("bad_xml.qdpx");
+    let file = std::fs::File::create(&qdpx_path).expect("Failed to create test QDPX");
+    let mut zip = zip::ZipWriter::new(file);
+
+    zip.start_file(
+        "project.qde",
+        zip::write::FileOptions::<()>::default().compression_method(zip::CompressionMethod::Deflated),
+    )
+    .unwrap();
+    zip.write_all(b"<Project><UnclosedTag>").unwrap();
+    zip.finish().unwrap();
+
+    let pool_guard = state.db.read().await;
+    let pool = pool_guard.as_ref().expect("No DB");
+
+    let err = qdpx_import_internal(pool, &qdpx_path.to_string_lossy(), "merge")
+        .await
+        .expect_err("Should reject malformed XML");
+
+    assert!(
+        err.to_lowercase().contains("xml"),
+        "Error should mention XML, got: {}",
+        err
+    );
+
+    drop(pool_guard);
+}
+
+#[tokio::test]
+async fn qdpx_import_rejects_corrupted_zip() {
+    use crate::commands::qdpx_import::qdpx_import_internal;
+    use std::io::Write;
+
+    let (state, _temp_dir) = setup_test_state().await;
+
+    let project = projects_create_internal(
+        &state,
+        "QDPX Corrupt ZIP Test".to_string(),
+        None,
+        _temp_dir.path().to_string_lossy().to_string(),
+        None,
+    )
+    .await
+    .expect("Failed to create project");
+
+    // Write a file that is NOT a valid ZIP
+    let qdpx_path = _temp_dir.path().join("corrupt.qdpx");
+    let mut file = std::fs::File::create(&qdpx_path).expect("Failed to create test file");
+    file.write_all(b"This is not a ZIP file at all. Just random bytes.").unwrap();
+    drop(file);
+
+    let pool_guard = state.db.read().await;
+    let pool = pool_guard.as_ref().expect("No DB");
+
+    let err = qdpx_import_internal(pool, &qdpx_path.to_string_lossy(), "merge")
+        .await
+        .expect_err("Should reject non-ZIP file");
+
+    assert!(
+        err.to_lowercase().contains("zip") || err.to_lowercase().contains("invalid"),
+        "Error should mention ZIP/invalid, got: {}",
+        err
+    );
+
+    drop(pool_guard);
+}
