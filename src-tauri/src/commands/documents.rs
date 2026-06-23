@@ -1,23 +1,19 @@
-use tauri::{AppHandle, State, command};
-use super::projects::AppState;
 use super::import::Document;
+use super::projects::AppState;
+use tauri::{command, AppHandle, State};
 
-pub async fn document_delete_internal(
-    state: &AppState,
-    id: String,
-) -> Result<(), String> {
+pub async fn document_delete_internal(state: &AppState, id: String) -> Result<(), String> {
     let pool_guard = state.db.read().await;
     let pool = pool_guard.as_ref().ok_or("No project open")?;
 
     // Fetch the document row to get original_path (for the asset extension)
     // before the DELETE cascade removes it.
-    let row: Option<(Option<String>, String)> = sqlx::query_as(
-        "SELECT original_path, file_format FROM document WHERE id = ?"
-    )
-    .bind(&id)
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| e.to_string())?;
+    let row: Option<(Option<String>, String)> =
+        sqlx::query_as("SELECT original_path, file_format FROM document WHERE id = ?")
+            .bind(&id)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| e.to_string())?;
 
     let (original_path, file_format) = match row {
         Some(r) => r,
@@ -49,7 +45,10 @@ pub async fn document_delete_internal(
             // Best-effort: log failure but don't abort the delete.
             if asset_path.exists() {
                 if let Err(e) = std::fs::remove_file(&asset_path) {
-                    eprintln!("Warning: could not delete asset file {:?}: {}", asset_path, e);
+                    eprintln!(
+                        "Warning: could not delete asset file {:?}: {}",
+                        asset_path, e
+                    );
                 }
             }
         }
@@ -96,13 +95,12 @@ pub async fn document_get_content(
     let pool_guard = state.db.read().await;
     let pool = pool_guard.as_ref().ok_or("No active database connection")?;
 
-    let plain_text: Option<String> = sqlx::query_scalar(
-        "SELECT plain_text FROM document WHERE id = ?"
-    )
-    .bind(id)
-    .fetch_one(pool)
-    .await
-    .map_err(|e| format!("Failed to fetch document content: {}", e))?;
+    let plain_text: Option<String> =
+        sqlx::query_scalar("SELECT plain_text FROM document WHERE id = ?")
+            .bind(id)
+            .fetch_one(pool)
+            .await
+            .map_err(|e| format!("Failed to fetch document content: {}", e))?;
 
     Ok(plain_text.unwrap_or_default())
 }

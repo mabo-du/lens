@@ -1,10 +1,10 @@
-use serde::Serialize;
-use tauri::{State, command};
-use super::projects::{AppState, Project};
-use super::import::Document;
-use super::codes::CodeTreeNode;
 use super::annotations::AnnotationRecord;
+use super::codes::CodeTreeNode;
+use super::import::Document;
 use super::memos::Memo;
+use super::projects::{AppState, Project};
+use serde::Serialize;
+use tauri::{command, State};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -58,7 +58,7 @@ pub async fn export_prepare_internal(
     // Let's just fetch all codes and build the tree.
     let all_codes = sqlx::query_as::<_, super::codes::Code>(
         "SELECT id, project_id, name, color, description, created_by, created_at as createdAt 
-         FROM code WHERE project_id = ?"
+         FROM code WHERE project_id = ?",
     )
     .bind(&project_id)
     .fetch_all(pool)
@@ -102,17 +102,16 @@ pub async fn export_prepare_internal(
     // and on project open, so the fallback here should be unreachable.
     // We generate a UUID v4 as a defense-in-depth measure — an empty
     // GUID would violate REFI-QDA Projects.xsd.
-    let local_user = sqlx::query_as::<_, (String, String)>(
-        "SELECT id, display_name FROM local_user LIMIT 1"
-    )
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| format!("Failed to fetch local user: {}", e))?
-    .map(|(id, display_name)| LocalUserFallback { id, display_name })
-    .unwrap_or_else(|| LocalUserFallback {
-        id: uuid::Uuid::new_v4().to_string(),
-        display_name: "Local User (fallback)".to_string(),
-    });
+    let local_user =
+        sqlx::query_as::<_, (String, String)>("SELECT id, display_name FROM local_user LIMIT 1")
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| format!("Failed to fetch local user: {}", e))?
+            .map(|(id, display_name)| LocalUserFallback { id, display_name })
+            .unwrap_or_else(|| LocalUserFallback {
+                id: uuid::Uuid::new_v4().to_string(),
+                display_name: "Local User (fallback)".to_string(),
+            });
 
     Ok(ExportPayload {
         project,

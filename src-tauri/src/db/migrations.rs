@@ -1,4 +1,4 @@
-use sqlx::{SqlitePool, Executor};
+use sqlx::{Executor, SqlitePool};
 
 const MIGRATIONS: &[(&str, &str)] = &[
     (
@@ -24,7 +24,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), String> {
             "CREATE TABLE IF NOT EXISTS schema_version (
                 version      INTEGER PRIMARY KEY,
                 applied_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-            );"
+            );",
         )
         .execute(pool)
         .await
@@ -34,11 +34,12 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), String> {
         // We'll use the index in the array + 1 as the version number
         let version = MIGRATIONS.iter().position(|&(n, _)| n == *name).unwrap() as i32 + 1;
 
-        let applied: Option<i32> = sqlx::query_scalar("SELECT version FROM schema_version WHERE version = ?")
-            .bind(version)
-            .fetch_optional(pool)
-            .await
-            .map_err(|e| format!("Failed to check migration version: {}", e))?;
+        let applied: Option<i32> =
+            sqlx::query_scalar("SELECT version FROM schema_version WHERE version = ?")
+                .bind(version)
+                .fetch_optional(pool)
+                .await
+                .map_err(|e| format!("Failed to check migration version: {}", e))?;
 
         if applied.is_none() {
             // Apply migration

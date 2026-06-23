@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, State, command};
+use tauri::{command, AppHandle, State};
 use uuid::Uuid;
 
 use super::projects::AppState;
@@ -49,13 +49,12 @@ pub async fn annotations_create_internal(
     }
 
     // Verify the annotation fits within the document text
-    let doc_length: Option<i32> = sqlx::query_scalar(
-        "SELECT LENGTH(plain_text) FROM document WHERE id = ?"
-    )
-    .bind(&document_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| e.to_string())?;
+    let doc_length: Option<i32> =
+        sqlx::query_scalar("SELECT LENGTH(plain_text) FROM document WHERE id = ?")
+            .bind(&document_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| e.to_string())?;
 
     match doc_length {
         Some(len) if end_char > len => {
@@ -71,12 +70,10 @@ pub async fn annotations_create_internal(
     let id = Uuid::new_v4().to_string();
 
     // Look up the local user ID; fall back to NULL if none exists yet
-    let created_by: Option<String> = sqlx::query_scalar(
-        "SELECT id FROM local_user LIMIT 1"
-    )
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| e.to_string())?;
+    let created_by: Option<String> = sqlx::query_scalar("SELECT id FROM local_user LIMIT 1")
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| e.to_string())?;
 
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
@@ -92,15 +89,13 @@ pub async fn annotations_create_internal(
     .await
     .map_err(|e| e.to_string())?;
 
-    sqlx::query(
-        "INSERT INTO text_selection (selection_id, start_char, end_char) VALUES (?, ?, ?)"
-    )
-    .bind(&id)
-    .bind(start_char)
-    .bind(end_char)
-    .execute(&mut *tx)
-    .await
-    .map_err(|e| e.to_string())?;
+    sqlx::query("INSERT INTO text_selection (selection_id, start_char, end_char) VALUES (?, ?, ?)")
+        .bind(&id)
+        .bind(start_char)
+        .bind(end_char)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
 
     tx.commit().await.map_err(|e| e.to_string())?;
 
@@ -190,7 +185,7 @@ pub async fn annotations_list_by_code(
          JOIN text_selection ts ON ts.selection_id = s.id
          JOIN document d ON d.id = s.document_id
          WHERE s.code_id = ?
-         ORDER BY d.sort_order, ts.start_char"
+         ORDER BY d.sort_order, ts.start_char",
     )
     .bind(&code_id)
     .fetch_all(pool)

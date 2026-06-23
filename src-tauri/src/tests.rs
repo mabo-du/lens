@@ -53,15 +53,9 @@ async fn happy_path_create_project_import_document_code_and_annotation() {
     assert_eq!(code.name, "Test Code");
     assert!(!code.id.is_empty());
 
-    let ann = annotations_create_internal(
-        &state,
-        doc.id.clone(),
-        code.id.clone(),
-        0,
-        5,
-    )
-    .await
-    .expect("Annotation creation should succeed after P0 fixes");
+    let ann = annotations_create_internal(&state, doc.id.clone(), code.id.clone(), 0, 5)
+        .await
+        .expect("Annotation creation should succeed after P0 fixes");
 
     assert_eq!(ann.document_id, doc.id);
     assert_eq!(ann.code_id, code.id);
@@ -77,7 +71,7 @@ async fn happy_path_create_project_import_document_code_and_annotation() {
         "SELECT s.document_id, s.code_id, s.created_by, ts.start_char, ts.end_char
          FROM selection s
          JOIN text_selection ts ON ts.selection_id = s.id
-         WHERE s.id = ?"
+         WHERE s.id = ?",
     )
     .bind(&ann_id)
     .fetch_one(pool)
@@ -121,23 +115,20 @@ async fn export_prepare_does_not_crash_with_memos_and_codes() {
     // Create a project journal memo so the memo query is exercised
     let pool_guard = state.db.read().await;
     let pool = pool_guard.as_ref().expect("No DB");
-    sqlx::query(
-        "INSERT INTO memo (id, project_id, body) VALUES (?, ?, ?)"
-    )
-    .bind("memo-1")
-    .bind(&project.id)
-    .bind("This is a test memo")
-    .execute(pool)
-    .await
-    .expect("Failed to insert memo");
+    sqlx::query("INSERT INTO memo (id, project_id, body) VALUES (?, ?, ?)")
+        .bind("memo-1")
+        .bind(&project.id)
+        .bind("This is a test memo")
+        .execute(pool)
+        .await
+        .expect("Failed to insert memo");
     drop(pool_guard);
 
     // This should NOT crash. The known P0.3/P0.4 bugs cause sqlx
     // deserialization errors when columns don't match the struct.
     let result = export_prepare_internal(&state, project.id.clone()).await;
 
-    let payload = result
-        .expect("export_prepare should succeed after P0.3/P0.4 fixes");
+    let payload = result.expect("export_prepare should succeed after P0.3/P0.4 fixes");
 
     assert_eq!(payload.project.id, project.id);
     assert_eq!(payload.codes.len(), 1);
@@ -240,13 +231,11 @@ async fn codes_delete_cascades_to_children() {
     let pool_guard = state.db.read().await;
     let pool = pool_guard.as_ref().expect("No DB");
 
-    let child_exists: Option<i32> = sqlx::query_scalar(
-        "SELECT 1 FROM code WHERE id = ?"
-    )
-    .bind(&child.id)
-    .fetch_optional(pool)
-    .await
-    .expect("Query failed");
+    let child_exists: Option<i32> = sqlx::query_scalar("SELECT 1 FROM code WHERE id = ?")
+        .bind(&child.id)
+        .fetch_optional(pool)
+        .await
+        .expect("Query failed");
 
     assert!(
         child_exists.is_none(),
@@ -255,13 +244,12 @@ async fn codes_delete_cascades_to_children() {
     );
 
     // Also verify no stale closure rows remain for the child
-    let closure_stale: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM code_closure WHERE descendant = ?"
-    )
-    .bind(&child.id)
-    .fetch_one(pool)
-    .await
-    .expect("Query failed");
+    let closure_stale: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM code_closure WHERE descendant = ?")
+            .bind(&child.id)
+            .fetch_one(pool)
+            .await
+            .expect("Query failed");
 
     assert_eq!(
         closure_stale, 0,
@@ -356,27 +344,22 @@ async fn document_delete_cleans_up_annotations_and_fts() {
     .await
     .expect("Failed to create code");
 
-    let ann = annotations_create_internal(
-        &state,
-        doc.id.clone(),
-        code.id.clone(),
-        0,
-        5,
-    )
-    .await
-    .expect("Failed to create annotation");
+    let ann = annotations_create_internal(&state, doc.id.clone(), code.id.clone(), 0, 5)
+        .await
+        .expect("Failed to create annotation");
 
     // Verify annotation exists before deletion
     let pool_guard = state.db.read().await;
     let pool = pool_guard.as_ref().expect("No DB");
-    let ann_exists: Option<i32> = sqlx::query_scalar(
-        "SELECT 1 FROM selection WHERE id = ?"
-    )
-    .bind(&ann.id)
-    .fetch_optional(pool)
-    .await
-    .expect("Query failed");
-    assert!(ann_exists.is_some(), "Annotation should exist before document deletion");
+    let ann_exists: Option<i32> = sqlx::query_scalar("SELECT 1 FROM selection WHERE id = ?")
+        .bind(&ann.id)
+        .fetch_optional(pool)
+        .await
+        .expect("Query failed");
+    assert!(
+        ann_exists.is_some(),
+        "Annotation should exist before document deletion"
+    );
     drop(pool_guard);
 
     // Delete the document
@@ -401,15 +384,22 @@ async fn document_delete_cleans_up_annotations_and_fts() {
         .fetch_optional(pool)
         .await
         .expect("Query failed");
-    assert!(ann_exists.is_none(), "Annotation should be cascade-deleted with document");
+    assert!(
+        ann_exists.is_none(),
+        "Annotation should be cascade-deleted with document"
+    );
 
     // Verify text_selection is also gone
-    let ts_exists: Option<i32> = sqlx::query_scalar("SELECT 1 FROM text_selection WHERE selection_id = ?")
-        .bind(&ann.id)
-        .fetch_optional(pool)
-        .await
-        .expect("Query failed");
-    assert!(ts_exists.is_none(), "text_selection should be cascade-deleted");
+    let ts_exists: Option<i32> =
+        sqlx::query_scalar("SELECT 1 FROM text_selection WHERE selection_id = ?")
+            .bind(&ann.id)
+            .fetch_optional(pool)
+            .await
+            .expect("Query failed");
+    assert!(
+        ts_exists.is_none(),
+        "text_selection should be cascade-deleted"
+    );
 }
 
 #[tokio::test]
@@ -449,7 +439,11 @@ async fn memos_save_populates_created_by() {
     .expect("Failed to save memo");
 
     assert_eq!(memo.body, "This is a project journal memo");
-    assert_eq!(memo.created_by, Some(user_id), "created_by should be populated from local_user");
+    assert_eq!(
+        memo.created_by,
+        Some(user_id),
+        "created_by should be populated from local_user"
+    );
 }
 
 #[tokio::test]
@@ -498,7 +492,11 @@ async fn annotations_create_rejects_invalid_ranges() {
     let err = annotations_create_internal(&state, doc.id.clone(), code.id.clone(), 5, 5)
         .await
         .expect_err("Should reject end_char <= start_char");
-    assert!(err.contains("end_char must be greater than start_char"), "Error: {}", err);
+    assert!(
+        err.contains("end_char must be greater than start_char"),
+        "Error: {}",
+        err
+    );
 
     // end_char exceeds document length ("Hello world" = 11 chars)
     let err = annotations_create_internal(&state, doc.id.clone(), code.id.clone(), 0, 100)
@@ -528,32 +526,62 @@ async fn codes_create_rejects_invalid_colors() {
     .expect("Failed to create project");
 
     // Missing hash
-    let err = codes_create_internal(&state, project.id.clone(), None, "Bad".to_string(), Some("6366f1".to_string()))
-        .await
-        .expect_err("Should reject color without #");
+    let err = codes_create_internal(
+        &state,
+        project.id.clone(),
+        None,
+        "Bad".to_string(),
+        Some("6366f1".to_string()),
+    )
+    .await
+    .expect_err("Should reject color without #");
     assert!(err.contains("Invalid color"), "Error: {}", err);
 
     // Invalid chars
-    let err = codes_create_internal(&state, project.id.clone(), None, "Bad".to_string(), Some("#GGGGGG".to_string()))
-        .await
-        .expect_err("Should reject invalid hex chars");
+    let err = codes_create_internal(
+        &state,
+        project.id.clone(),
+        None,
+        "Bad".to_string(),
+        Some("#GGGGGG".to_string()),
+    )
+    .await
+    .expect_err("Should reject invalid hex chars");
     assert!(err.contains("Invalid color"), "Error: {}", err);
 
     // Wrong length
-    let err = codes_create_internal(&state, project.id.clone(), None, "Bad".to_string(), Some("#12345".to_string()))
-        .await
-        .expect_err("Should reject wrong-length color");
+    let err = codes_create_internal(
+        &state,
+        project.id.clone(),
+        None,
+        "Bad".to_string(),
+        Some("#12345".to_string()),
+    )
+    .await
+    .expect_err("Should reject wrong-length color");
     assert!(err.contains("Invalid color"), "Error: {}", err);
 
     // Valid colors should succeed
-    let code = codes_create_internal(&state, project.id.clone(), None, "Good".to_string(), Some("#abc".to_string()))
-        .await
-        .expect("Valid color #abc should succeed");
+    let code = codes_create_internal(
+        &state,
+        project.id.clone(),
+        None,
+        "Good".to_string(),
+        Some("#abc".to_string()),
+    )
+    .await
+    .expect("Valid color #abc should succeed");
     assert_eq!(code.color, "#abc");
 
-    let code = codes_create_internal(&state, project.id.clone(), None, "Good2".to_string(), Some("#6366f1".to_string()))
-        .await
-        .expect("Valid color #6366f1 should succeed");
+    let code = codes_create_internal(
+        &state,
+        project.id.clone(),
+        None,
+        "Good2".to_string(),
+        Some("#6366f1".to_string()),
+    )
+    .await
+    .expect("Valid color #6366f1 should succeed");
     assert_eq!(code.color, "#6366f1");
 }
 
@@ -644,8 +672,14 @@ async fn export_uses_real_local_user() {
         .await
         .expect("Export should succeed");
 
-    assert_eq!(payload.local_user.id, user_id, "Should use real local_user ID");
-    assert_eq!(payload.local_user.display_name, "Local User", "Should use auto-created display name");
+    assert_eq!(
+        payload.local_user.id, user_id,
+        "Should use real local_user ID"
+    );
+    assert_eq!(
+        payload.local_user.display_name, "Local User",
+        "Should use auto-created display name"
+    );
 }
 
 #[test]
@@ -668,7 +702,11 @@ fn build_tree_skips_missing_nodes() {
     let tree = build_tree(codes, edges);
     assert_eq!(tree.len(), 1);
     assert_eq!(tree[0].id, "a");
-    assert_eq!(tree[0].children.len(), 0, "Missing child 'b' should be skipped gracefully");
+    assert_eq!(
+        tree[0].children.len(),
+        0,
+        "Missing child 'b' should be skipped gracefully"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -804,12 +842,11 @@ async fn local_user_is_auto_created_on_project_create() {
     let pool_guard = state.db.read().await;
     let pool = pool_guard.as_ref().expect("No DB");
 
-    let (id, display_name): (String, String) = sqlx::query_as(
-        "SELECT id, display_name FROM local_user LIMIT 1"
-    )
-    .fetch_one(pool)
-    .await
-    .expect("local_user should exist after project creation");
+    let (id, display_name): (String, String) =
+        sqlx::query_as("SELECT id, display_name FROM local_user LIMIT 1")
+            .fetch_one(pool)
+            .await
+            .expect("local_user should exist after project creation");
 
     // Verify a valid UUID was generated.
     assert!(
@@ -817,7 +854,10 @@ async fn local_user_is_auto_created_on_project_create() {
         "local_user id should be a valid UUID, got: {}",
         id
     );
-    assert_eq!(display_name, "Local User", "Default display name should be 'Local User'");
+    assert_eq!(
+        display_name, "Local User",
+        "Default display name should be 'Local User'"
+    );
 }
 
 #[tokio::test]
@@ -840,7 +880,10 @@ async fn local_user_auto_created_before_export() {
         .expect("Export should succeed without manual local_user seeding");
 
     // The GUID must be a valid non-empty UUID.
-    assert!(!payload.local_user.id.is_empty(), "local_user.id must not be empty");
+    assert!(
+        !payload.local_user.id.is_empty(),
+        "local_user.id must not be empty"
+    );
     assert!(
         uuid::Uuid::parse_str(&payload.local_user.id).is_ok(),
         "Exported local_user.id should be a valid UUID, got: {}",
@@ -868,12 +911,33 @@ async fn closure_table_invariant_3_level_hierarchy() {
     .expect("Failed to create project");
 
     // Build A → B → C (3-level hierarchy)
-    let a = codes_create_internal(&state, project.id.clone(), None, "A".to_string(), Some("#111111".to_string()))
-        .await.expect("Failed to create A");
-    let b = codes_create_internal(&state, project.id.clone(), Some(a.id.clone()), "B".to_string(), Some("#222222".to_string()))
-        .await.expect("Failed to create B");
-    let c = codes_create_internal(&state, project.id.clone(), Some(b.id.clone()), "C".to_string(), Some("#333333".to_string()))
-        .await.expect("Failed to create C");
+    let a = codes_create_internal(
+        &state,
+        project.id.clone(),
+        None,
+        "A".to_string(),
+        Some("#111111".to_string()),
+    )
+    .await
+    .expect("Failed to create A");
+    let b = codes_create_internal(
+        &state,
+        project.id.clone(),
+        Some(a.id.clone()),
+        "B".to_string(),
+        Some("#222222".to_string()),
+    )
+    .await
+    .expect("Failed to create B");
+    let c = codes_create_internal(
+        &state,
+        project.id.clone(),
+        Some(b.id.clone()),
+        "C".to_string(),
+        Some("#333333".to_string()),
+    )
+    .await
+    .expect("Failed to create C");
 
     let pool_guard = state.db.read().await;
     let pool = pool_guard.as_ref().expect("No DB");
@@ -883,7 +947,7 @@ async fn closure_table_invariant_3_level_hierarchy() {
     //   (A,B,1) (B,C,1)         — direct edges
     //   (A,C,2)                 — transitive
     let rows: Vec<(String, String, i32)> = sqlx::query_as(
-        "SELECT ancestor, descendant, depth FROM code_closure ORDER BY ancestor, depth"
+        "SELECT ancestor, descendant, depth FROM code_closure ORDER BY ancestor, depth",
     )
     .fetch_all(pool)
     .await
@@ -901,14 +965,27 @@ async fn closure_table_invariant_3_level_hierarchy() {
         (c.id.clone(), c.id.clone(), 0),
     ];
     for (ancestor, descendant, depth) in &expected {
-        let found = rows.iter().any(|(ra, rd, rdepth)| ra == ancestor && rd == descendant && rdepth == depth);
-        assert!(found, "Expected closure row ({}, {}, {}), got rows: {:?}", ancestor, descendant, depth, rows);
+        let found = rows
+            .iter()
+            .any(|(ra, rd, rdepth)| ra == ancestor && rd == descendant && rdepth == depth);
+        assert!(
+            found,
+            "Expected closure row ({}, {}, {}), got rows: {:?}",
+            ancestor, descendant, depth, rows
+        );
     }
     drop(pool_guard);
 
     // Create new root X, move B under it
-    let x = codes_create_internal(&state, project.id.clone(), None, "X".to_string(), Some("#999999".to_string()))
-        .await.expect("Failed to create X");
+    let x = codes_create_internal(
+        &state,
+        project.id.clone(),
+        None,
+        "X".to_string(),
+        Some("#999999".to_string()),
+    )
+    .await
+    .expect("Failed to create X");
 
     codes_move_internal(&state, b.id.clone(), Some(x.id.clone()))
         .await
@@ -917,7 +994,7 @@ async fn closure_table_invariant_3_level_hierarchy() {
     let pool_guard = state.db.read().await;
     let pool = pool_guard.as_ref().expect("No DB");
     let rows_after: Vec<(String, String, i32)> = sqlx::query_as(
-        "SELECT ancestor, descendant, depth FROM code_closure ORDER BY ancestor, depth"
+        "SELECT ancestor, descendant, depth FROM code_closure ORDER BY ancestor, depth",
     )
     .fetch_all(pool)
     .await
@@ -925,18 +1002,32 @@ async fn closure_table_invariant_3_level_hierarchy() {
 
     // After move: A is isolated (self only), B→C under X
     // Expected: (A,A,0) (X,X,0) (B,B,0) (C,C,0) (X,B,1) (X,C,2) (B,C,1) = 7 rows
-    assert_eq!(rows_after.len(), 7, "Should have 7 closure rows after moving B under X");
+    assert_eq!(
+        rows_after.len(),
+        7,
+        "Should have 7 closure rows after moving B under X"
+    );
 
     // No stale A→B or A→C rows
-    let stale_ab = rows_after.iter().any(|(ra, rd, _)| ra == &a.id && rd == &b.id);
-    let stale_ac = rows_after.iter().any(|(ra, rd, _)| ra == &a.id && rd == &c.id);
+    let stale_ab = rows_after
+        .iter()
+        .any(|(ra, rd, _)| ra == &a.id && rd == &b.id);
+    let stale_ac = rows_after
+        .iter()
+        .any(|(ra, rd, _)| ra == &a.id && rd == &c.id);
     assert!(!stale_ab, "Stale A→B row should not exist after move");
     assert!(!stale_ac, "Stale A→C row should not exist after move");
 
     // New links through X
-    let xb = rows_after.iter().any(|(ra, rd, d)| ra == &x.id && rd == &b.id && *d == 1);
-    let xc = rows_after.iter().any(|(ra, rd, d)| ra == &x.id && rd == &c.id && *d == 2);
-    let bc = rows_after.iter().any(|(ra, rd, d)| ra == &b.id && rd == &c.id && *d == 1);
+    let xb = rows_after
+        .iter()
+        .any(|(ra, rd, d)| ra == &x.id && rd == &b.id && *d == 1);
+    let xc = rows_after
+        .iter()
+        .any(|(ra, rd, d)| ra == &x.id && rd == &c.id && *d == 2);
+    let bc = rows_after
+        .iter()
+        .any(|(ra, rd, d)| ra == &b.id && rd == &c.id && *d == 1);
     assert!(xb, "X→B (depth 1) should exist");
     assert!(xc, "X→C (depth 2) should exist");
     assert!(bc, "B→C (depth 1) should still exist");

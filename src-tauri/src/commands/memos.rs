@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
-use tauri::{State, command};
-use uuid::Uuid;
 use super::projects::AppState;
+use serde::{Deserialize, Serialize};
+use tauri::{command, State};
+use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -36,11 +36,15 @@ pub async fn memos_save_internal(
     } else if let Some(ref c) = linked_code_id {
         sqlx::query_scalar("SELECT id FROM memo WHERE linked_code_id = ?")
             .bind(c)
-            .fetch_optional(pool).await.map_err(|e| e.to_string())?
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| e.to_string())?
     } else if let Some(ref s) = linked_selection_id {
         sqlx::query_scalar("SELECT id FROM memo WHERE linked_selection_id = ?")
             .bind(s)
-            .fetch_optional(pool).await.map_err(|e| e.to_string())?
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| e.to_string())?
     } else {
         None
     };
@@ -53,12 +57,10 @@ pub async fn memos_save_internal(
         id
     } else {
         // Look up the local user ID for authorship attribution
-        let created_by: Option<String> = sqlx::query_scalar(
-            "SELECT id FROM local_user LIMIT 1"
-        )
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| e.to_string())?;
+        let created_by: Option<String> = sqlx::query_scalar("SELECT id FROM local_user LIMIT 1")
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| e.to_string())?;
 
         let id = Uuid::new_v4().to_string();
         sqlx::query(
@@ -93,7 +95,14 @@ pub async fn memos_save(
     linked_selection_id: Option<String>,
     body: String,
 ) -> Result<Memo, String> {
-    memos_save_internal(&state, project_id, linked_code_id, linked_selection_id, body).await
+    memos_save_internal(
+        &state,
+        project_id,
+        linked_code_id,
+        linked_selection_id,
+        body,
+    )
+    .await
 }
 
 #[command]
