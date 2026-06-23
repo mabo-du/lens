@@ -45,6 +45,9 @@ fn main() {
             commands::search::search_query,
             commands::export::export_prepare,
             commands::qdpx_import::qdpx_import,
+            commands::projects::local_user_get_name,
+            commands::projects::local_user_update_name,
+            commands::sample_project::projects_create_sample,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
