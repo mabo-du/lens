@@ -14,6 +14,7 @@ async fn happy_path_create_project_import_document_code_and_annotation() {
         "Test Project".to_string(),
         Some("A test project".to_string()),
         _temp_dir.path().to_string_lossy().to_string(),
+        None,
     )
     .await
     .expect("Failed to create project");
@@ -95,6 +96,7 @@ async fn export_prepare_does_not_crash_with_memos_and_codes() {
         "Export Test".to_string(),
         None,
         _temp_dir.path().to_string_lossy().to_string(),
+        None,
     )
     .await
     .expect("Failed to create project");
@@ -198,6 +200,7 @@ async fn codes_delete_cascades_to_children() {
         "Cascade Test".to_string(),
         None,
         _temp_dir.path().to_string_lossy().to_string(),
+        None,
     )
     .await
     .expect("Failed to create project");
@@ -269,6 +272,7 @@ async fn codes_move_rejects_cycles() {
         "Cycle Test".to_string(),
         None,
         _temp_dir.path().to_string_lossy().to_string(),
+        None,
     )
     .await
     .expect("Failed to create project");
@@ -317,6 +321,7 @@ async fn document_delete_cleans_up_annotations_and_fts() {
         "Delete Test".to_string(),
         None,
         _temp_dir.path().to_string_lossy().to_string(),
+        None,
     )
     .await
     .expect("Failed to create project");
@@ -413,6 +418,7 @@ async fn memos_save_populates_created_by() {
         "Memo Test".to_string(),
         None,
         _temp_dir.path().to_string_lossy().to_string(),
+        None,
     )
     .await
     .expect("Failed to create project");
@@ -455,6 +461,7 @@ async fn annotations_create_rejects_invalid_ranges() {
         "Range Test".to_string(),
         None,
         _temp_dir.path().to_string_lossy().to_string(),
+        None,
     )
     .await
     .expect("Failed to create project");
@@ -521,6 +528,7 @@ async fn codes_create_rejects_invalid_colors() {
         "Color Test".to_string(),
         None,
         _temp_dir.path().to_string_lossy().to_string(),
+        None,
     )
     .await
     .expect("Failed to create project");
@@ -594,6 +602,7 @@ async fn codes_create_auto_assigns_palette_colors() {
         "Palette Test".to_string(),
         None,
         _temp_dir.path().to_string_lossy().to_string(),
+        None,
     )
     .await
     .expect("Failed to create project");
@@ -626,6 +635,7 @@ async fn search_rejects_empty_query() {
         "Search Test".to_string(),
         None,
         _temp_dir.path().to_string_lossy().to_string(),
+        None,
     )
     .await
     .expect("Failed to create project");
@@ -652,6 +662,7 @@ async fn export_uses_real_local_user() {
         "Export User Test".to_string(),
         None,
         _temp_dir.path().to_string_lossy().to_string(),
+        None,
     )
     .await
     .expect("Failed to create project");
@@ -721,6 +732,7 @@ async fn project_name_rejects_empty() {
         "".to_string(),
         None,
         _temp_dir.path().to_string_lossy().to_string(),
+        None,
     )
     .await
     .expect_err("Empty project name should be rejected");
@@ -736,6 +748,7 @@ async fn project_name_rejects_path_traversal() {
         ".".to_string(),
         None,
         _temp_dir.path().to_string_lossy().to_string(),
+        None,
     )
     .await
     .expect_err("Project name '.' should be rejected");
@@ -747,6 +760,7 @@ async fn project_name_rejects_path_traversal() {
         "..".to_string(),
         None,
         _temp_dir.path().to_string_lossy().to_string(),
+        None,
     )
     .await
     .expect_err("Project name '..' should be rejected");
@@ -758,6 +772,7 @@ async fn project_name_rejects_path_traversal() {
         "../../foo".to_string(),
         None,
         _temp_dir.path().to_string_lossy().to_string(),
+        None,
     )
     .await
     .expect_err("Project name '../../foo' should be rejected");
@@ -772,6 +787,7 @@ async fn project_name_rejects_absolute_path() {
         "/etc/passwd".to_string(),
         None,
         _temp_dir.path().to_string_lossy().to_string(),
+        None,
     )
     .await
     .expect_err("Absolute path /etc/passwd should be rejected");
@@ -786,6 +802,7 @@ async fn project_name_rejects_invalid_characters() {
         "name$bad".to_string(),
         None,
         _temp_dir.path().to_string_lossy().to_string(),
+        None,
     )
     .await
     .expect_err("Project name with $ should be rejected");
@@ -801,6 +818,7 @@ async fn project_name_rejects_overlong() {
         long_name,
         None,
         _temp_dir.path().to_string_lossy().to_string(),
+        None,
     )
     .await
     .expect_err("Overlong project name should be rejected");
@@ -815,6 +833,7 @@ async fn project_name_accepts_valid_name() {
         "My Project 2025".to_string(),
         None,
         _temp_dir.path().to_string_lossy().to_string(),
+        None,
     )
     .await
     .expect("Valid project name should succeed");
@@ -835,6 +854,7 @@ async fn local_user_is_auto_created_on_project_create() {
         "User Test".to_string(),
         None,
         _temp_dir.path().to_string_lossy().to_string(),
+        None,
     )
     .await
     .expect("Project creation should succeed");
@@ -869,6 +889,7 @@ async fn local_user_auto_created_before_export() {
         "Export GUID Test".to_string(),
         None,
         _temp_dir.path().to_string_lossy().to_string(),
+        None,
     )
     .await
     .expect("Project creation should succeed");
@@ -906,6 +927,7 @@ async fn closure_table_invariant_3_level_hierarchy() {
         "Closure Test".to_string(),
         None,
         _temp_dir.path().to_string_lossy().to_string(),
+        None,
     )
     .await
     .expect("Failed to create project");

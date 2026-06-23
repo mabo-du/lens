@@ -9,7 +9,7 @@ import { FuzzyCodePicker } from '../editor/FuzzyCodePicker';
 import { ProjectJournalDialog } from '../memos/ProjectJournalDialog';
 import { SearchDialog } from '../search/SearchDialog';
 import { useProjectStore } from '@/store/projectStore';
-import { Book, Download, LogOut, Pencil, Settings } from 'lucide-react';
+import { Book, Download, LogOut, Pencil, Settings, HelpCircle } from 'lucide-react';
 import React, { useState, ReactNode, useRef, useEffect } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
@@ -20,8 +20,9 @@ import { exporterRegistry } from '@/export/index';
 import { projectsIpc } from '@/ipc/projects';
 import { annotationsIpc } from '@/ipc/annotations';
 import { SettingsDialog } from '../settings/SettingsDialog';
+import { HelpDialog } from '../settings/HelpDialog';
 
-function TopNav({ onJournalOpen, onCloseProject, onSettingsOpen }: { onJournalOpen: () => void; onCloseProject: () => void; onSettingsOpen: () => void }) {
+function TopNav({ onJournalOpen, onCloseProject, onSettingsOpen, onHelpOpen }: { onJournalOpen: () => void; onCloseProject: () => void; onSettingsOpen: () => void; onHelpOpen: () => void }) {
   const activeProject = useProjectStore(s => s.activeProject);
   const setActiveProject = useProjectStore(s => s.setActiveProject);
   const [exporting, setExporting] = useState(false);
@@ -162,6 +163,13 @@ function TopNav({ onJournalOpen, onCloseProject, onSettingsOpen }: { onJournalOp
         >
           <Settings className="w-4 h-4" />
         </button>
+        <button
+          className="flex items-center space-x-2 hover:bg-slate-700 px-2 py-1.5 rounded transition-colors text-sm"
+          onClick={onHelpOpen}
+          title="Keyboard Shortcuts"
+        >
+          <HelpCircle className="w-4 h-4" />
+        </button>
       </div>
     </div>
   );
@@ -201,6 +209,7 @@ export function Workspace() {
   const centerPanelWidth = 100 - leftPanelWidth - rightPanelWidth;
   const [journalOpen, setJournalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const setActiveProject = useProjectStore(s => s.setActiveProject);
 
   // Undo/Redo keyboard shortcuts (ACTION_PLAN P4.6)
@@ -275,7 +284,7 @@ export function Workspace() {
 
   return (
     <div className="flex flex-col h-screen w-full bg-slate-100 font-sans">
-      <TopNav onJournalOpen={() => setJournalOpen(true)} onCloseProject={handleCloseProject} onSettingsOpen={() => setSettingsOpen(true)} />
+      <TopNav onJournalOpen={() => setJournalOpen(true)} onCloseProject={handleCloseProject} onSettingsOpen={() => setSettingsOpen(true)} onHelpOpen={() => setHelpOpen(true)} />
       <Group
         onLayoutChanged={(sizes) => {
           // react-resizable-panels v4 passes sizes as a Record<string, number>
@@ -311,6 +320,7 @@ export function Workspace() {
       <FuzzyCodePicker />
       <ProjectJournalDialog open={journalOpen} onOpenChange={setJournalOpen} />
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
       <SearchDialog />
     </div>
   );

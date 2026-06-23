@@ -13,6 +13,7 @@ pub async fn projects_create_sample_internal(
         "Sample Project".to_string(),
         Some("A sample qualitative data analysis project with interview transcripts and starter codes.".to_string()),
         target_dir,
+        None,
     )
     .await?;
 

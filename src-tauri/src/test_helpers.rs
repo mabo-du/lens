@@ -9,13 +9,14 @@ pub async fn setup_test_state() -> (AppState, tempfile::TempDir) {
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let db_path = temp_dir.path().join("test.qdaproj");
 
-    let pool = init_db(&db_path)
+    let pool = init_db(&db_path, None)
         .await
         .expect("Failed to initialize test database");
 
     let state = AppState {
         db: RwLock::new(Some(pool)),
         project_folder: RwLock::new(Some(temp_dir.path().to_path_buf())),
+        encryption_key: RwLock::new(None),
     };
 
     (state, temp_dir)

@@ -16,6 +16,7 @@ fn main() {
         .manage(commands::projects::AppState {
             db: tokio::sync::RwLock::new(None),
             project_folder: tokio::sync::RwLock::new(None),
+            encryption_key: tokio::sync::RwLock::new(None),
         })
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
@@ -47,6 +48,7 @@ fn main() {
             commands::qdpx_import::qdpx_import,
             commands::projects::local_user_get_name,
             commands::projects::local_user_update_name,
+            commands::projects::projects_is_encrypted,
             commands::sample_project::projects_create_sample,
         ])
         .run(tauri::generate_context!())

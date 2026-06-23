@@ -8,6 +8,7 @@ use uuid::Uuid;
 pub struct AppState {
     pub db: RwLock<Option<SqlitePool>>,
     pub project_folder: RwLock<Option<PathBuf>>,
+    pub encryption_key: RwLock<Option<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
@@ -90,6 +91,7 @@ pub async fn projects_create_internal(
     name: String,
     description: Option<String>,
     target_dir: String,
+    encryption_key: Option<String>,
 ) -> Result<Project, String> {
     validate_project_name(&name)?;
 
@@ -103,10 +105,18 @@ pub async fn projects_create_internal(
     std::fs::create_dir_all(&assets_dir)
         .map_err(|e| format!("Failed to create assets directory: {}", e))?;
 
+    // Write .encrypted flag file if encryption is enabled
+    if encryption_key.is_some() {
+        let flag_path = project_dir.join(".encrypted");
+        std::fs::write(&flag_path, "1")
+            .map_err(|e| format!("Failed to write encryption flag: {}", e))?;
+    }
+
     let db_path = project_dir.join("project.qdaproj");
 
     // Initialize DB and run migrations
-    let pool = crate::db::init_db(&db_path).await?;
+    let pool = crate::db::init_db(&db_path, encryption_key.as_deref()).await?;
+    *state.encryption_key.write().await = encryption_key;
 
     let id = Uuid::new_v4().to_string();
 
@@ -145,8 +155,9 @@ pub async fn projects_create(
     name: String,
     description: Option<String>,
     target_dir: String,
+    encryption_key: Option<String>,
 ) -> Result<Project, String> {
-    projects_create_internal(&state, name, description, target_dir).await
+    projects_create_internal(&state, name, description, target_dir, encryption_key).await
 }
 
 #[command]
@@ -154,13 +165,16 @@ pub async fn projects_open(
     _app: AppHandle,
     state: State<'_, AppState>,
     project_dir: String,
+    encryption_key: Option<String>,
 ) -> Result<Project, String> {
-    let db_path = PathBuf::from(&project_dir).join("project.qdaproj");
+    let project_path = PathBuf::from(&project_dir);
+    let db_path = project_path.join("project.qdaproj");
     if !db_path.exists() {
         return Err("Project database not found".to_string());
     }
 
-    let pool = crate::db::init_db(&db_path).await?;
+    let pool = crate::db::init_db(&db_path, encryption_key.as_deref()).await?;
+    *state.encryption_key.write().await = encryption_key;
 
     // Auto-create local_user if missing (handles projects created before
     // the §1.5 fix landed).
@@ -182,6 +196,13 @@ pub async fn projects_open(
     *state.project_folder.write().await = Some(folder);
 
     Ok(project)
+}
+
+/// Check if a project directory has encryption enabled (.encrypted flag file).
+#[command]
+pub async fn projects_is_encrypted(project_dir: String) -> Result<bool, String> {
+    let flag_path = PathBuf::from(&project_dir).join(".encrypted");
+    Ok(flag_path.exists())
 }
 
 #[command]
@@ -262,5 +283,6 @@ pub async fn local_user_update_name(
 pub async fn projects_close(state: State<'_, AppState>) -> Result<(), String> {
     *state.db.write().await = None;
     *state.project_folder.write().await = None;
+    *state.encryption_key.write().await = None;
     Ok(())
 }

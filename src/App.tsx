@@ -62,7 +62,14 @@ function App() {
     const selected = folderPath || await openDialog({ directory: true });
     if (selected && typeof selected === 'string') {
       try {
-        const proj = await projectsIpc.open(selected);
+        // Check if project is encrypted
+        let encryptionKey: string | undefined;
+        const encrypted = await projectsIpc.isEncrypted(selected);
+        if (encrypted) {
+          encryptionKey = prompt('This project is encrypted. Enter password:') ?? undefined;
+          if (!encryptionKey) return;
+        }
+        const proj = await projectsIpc.open(selected, encryptionKey ?? undefined);
         await loadProjectData(proj, selected);
       } catch (e) {
         toast.error("Failed to open project: " + e);
@@ -110,6 +117,7 @@ function App() {
     if (selected && typeof selected === 'string') {
       try {
         const proj = await projectsIpc.createSample(selected);
+        // Sample project is never encrypted
         setActiveProject(proj);
         setDocuments([]);
         setCodes([]);
@@ -132,7 +140,17 @@ function App() {
     const selected = await openDialog({ directory: true });
     if (selected && typeof selected === 'string') {
       try {
-        const proj = await projectsIpc.create("New Project", "", selected);
+        // Optionally encrypt
+        const useEncryption = confirm('Enable database encryption? (Cancel to skip)');
+        let encryptionKey: string | undefined;
+        if (useEncryption) {
+          encryptionKey = prompt('Enter encryption password (min 8 chars, remember it — it cannot be recovered):') ?? undefined;
+          if (!encryptionKey || encryptionKey.length < 8) {
+            if (encryptionKey) toast.error('Password must be at least 8 characters');
+            return;
+          }
+        }
+        const proj = await projectsIpc.create("New Project", "", selected, encryptionKey ?? undefined);
         const folderPath = `${selected}/${proj.name}`;
         setActiveProject(proj);
         setDocuments([]);
