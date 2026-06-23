@@ -12,9 +12,9 @@
   "app": {
     "windows": [
       {
-        "title": "lens",
-        "width": 800,
-        "height": 600
+        "title": "LENS",
+        "width": 1280,
+        "height": 800
       }
     ],
     "security": {

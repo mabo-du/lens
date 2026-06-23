@@ -93,14 +93,13 @@ pub async fn document_get_content(
     id: String,
 ) -> Result<String, String> {
     let pool_guard = state.db.read().await;
-    let pool = pool_guard.as_ref().ok_or("No active database connection")?;
-
-    let plain_text: Option<String> =
-        sqlx::query_scalar("SELECT plain_text FROM document WHERE id = ?")
-            .bind(id)
-            .fetch_one(pool)
-            .await
-            .map_err(|e| format!("Failed to fetch document content: {}", e))?;
+    let pool = pool_guard.as_ref().ok_or("No active database connection")?;    let plain_text: Option<String> = sqlx::query_scalar(
+        "SELECT plain_text FROM document WHERE id = ?"
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Failed to fetch document content: {}", e))?;
 
     Ok(plain_text.unwrap_or_default())
 }
