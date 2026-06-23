@@ -25,6 +25,11 @@ pub async fn memos_save_internal(
     linked_selection_id: Option<String>,
     body: String,
 ) -> Result<Memo, String> {
+    // Input validation (ACTION_PLAN P2.5)
+    if body.len() > 50000 {
+        return Err("Memo body must be 50000 characters or fewer".to_string());
+    }
+
     let pool_guard = state.db.read().await;
     let pool = pool_guard.as_ref().ok_or("No project open")?;
 
