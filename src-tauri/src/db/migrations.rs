@@ -19,13 +19,11 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), String> {
     for (i, (name, sql)) in MIGRATIONS.iter().enumerate() {
         let version = i as i32 + 1;
 
-        // Run PRAGMAS
         sqlx::query("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON; PRAGMA temp_store = MEMORY; PRAGMA cache_size = -32000;")
             .execute(pool)
             .await
             .map_err(|e| format!("Failed to set pragmas: {}", e))?;
 
-        // Initialize schema_version table
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS schema_version (
                 version      INTEGER PRIMARY KEY,

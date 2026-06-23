@@ -33,7 +33,6 @@ export function SettingsDialog({
   const [displayName, setDisplayName] = useState('');
   const [savingName, setSavingName] = useState(false);
 
-  // Load current display name
   useEffect(() => {
     if (open && activeProject) {
       projectsIpc.localUserGetName()

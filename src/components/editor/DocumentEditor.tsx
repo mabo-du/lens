@@ -116,7 +116,7 @@ export function DocumentEditor() {
           top: coords.top - containerRect.top + scrollTop,
           color: flatCodes.find(c => c.id === ann.codeId)?.color ?? '#888',
         };
-      } catch (e) {
+      } catch (_e) {
         // PM might throw if pos is out of bounds during transition
         return null;
       }

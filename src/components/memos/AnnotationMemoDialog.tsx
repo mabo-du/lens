@@ -33,7 +33,6 @@ export function AnnotationMemoDialog({ annotationId, onClose }: { annotationId: 
     codeName = flatCodes.find(c => c.id === annotation.codeId)?.name || 'Unknown Code';
   }
 
-  // Clean up pending write timeout on unmount
   useEffect(() => {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);

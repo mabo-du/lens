@@ -1,9 +1,3 @@
-/// Qualitative Data Analysis colour palette.
-///
-/// Designed for readability on light backgrounds and distinctiveness
-/// across up to 12 codes.  Colours are chosen to be accessible
-/// (WCAG AA contrast ratio ≥ 4.5:1 against white).
-// ---- Palette constants ----
 pub const COLORS: &[&str] = &[
     "#6366f1", // Indigo
     "#0891b2", // Cyan

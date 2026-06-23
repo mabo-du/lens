@@ -170,7 +170,6 @@ pub async fn documents_import_internal(
 
     // FTS triggers handle indexing automatically
 
-    // Fetch and return document
     let doc = sqlx::query_as::<_, Document>(
         "SELECT id, project_id, title, original_path, file_format, plain_text, text_hash, extractor_id, word_count, imported_at, sort_order FROM document WHERE id = ?"
     )

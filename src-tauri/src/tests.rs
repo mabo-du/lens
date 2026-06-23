@@ -103,7 +103,6 @@ async fn export_prepare_does_not_crash_with_memos_and_codes() {
 
     let _user_id = seed_local_user(&state).await;
 
-    // Create a code so the export queries the code table
     let _code = codes_create_internal(
         &state,
         project.id.clone(),
@@ -114,7 +113,6 @@ async fn export_prepare_does_not_crash_with_memos_and_codes() {
     .await
     .expect("Failed to create code");
 
-    // Create a project journal memo so the memo query is exercised
     let pool_guard = state.db.read().await;
     let pool = pool_guard.as_ref().expect("No DB");
     sqlx::query("INSERT INTO memo (id, project_id, body) VALUES (?, ?, ?)")
@@ -185,10 +183,6 @@ async fn code_tree_builds_correctly() {
     assert_eq!(tree[0].children[1].name, "Gamma");
 }
 
-// ---------------------------------------------------------------------------
-// Regression tests for P1 bugs (currently document broken behaviour)
-// ---------------------------------------------------------------------------
-
 #[tokio::test]
 async fn codes_delete_cascades_to_children() {
     use crate::commands::codes::codes_delete_internal;
@@ -225,7 +219,6 @@ async fn codes_delete_cascades_to_children() {
     .await
     .expect("Failed to create child code");
 
-    // Delete the parent
     codes_delete_internal(&state, parent.id.clone())
         .await
         .expect("Failed to delete parent");
@@ -367,7 +360,6 @@ async fn document_delete_cleans_up_annotations_and_fts() {
     );
     drop(pool_guard);
 
-    // Delete the document
     document_delete_internal(&state, doc.id.clone())
         .await
         .expect("Failed to delete document");
@@ -720,10 +712,6 @@ fn build_tree_skips_missing_nodes() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// Phase 1.2 — Path traversal / project-name validation tests
-// ---------------------------------------------------------------------------
-
 #[tokio::test]
 async fn project_name_rejects_empty() {
     let (state, _temp_dir) = setup_test_state().await;
@@ -840,10 +828,6 @@ async fn project_name_accepts_valid_name() {
     assert_eq!(project.name, "My Project 2025");
 }
 
-// ---------------------------------------------------------------------------
-// Phase 1.5 — Empty GUID / local_user auto-creation tests
-// ---------------------------------------------------------------------------
-
 #[tokio::test]
 async fn local_user_is_auto_created_on_project_create() {
     let (state, _temp_dir) = setup_test_state().await;
@@ -911,10 +895,6 @@ async fn local_user_auto_created_before_export() {
         payload.local_user.id
     );
 }
-
-// ---------------------------------------------------------------------------
-// Phase 2.1 — Closure-table invariant test
-// ---------------------------------------------------------------------------
 
 #[tokio::test]
 async fn closure_table_invariant_3_level_hierarchy() {
@@ -998,7 +978,6 @@ async fn closure_table_invariant_3_level_hierarchy() {
     }
     drop(pool_guard);
 
-    // Create new root X, move B under it
     let x = codes_create_internal(
         &state,
         project.id.clone(),
@@ -1055,10 +1034,6 @@ async fn closure_table_invariant_3_level_hierarchy() {
     assert!(bc, "B→C (depth 1) should still exist");
 }
 
-// ---------------------------------------------------------------------------
-// Phase 4.8 — REFI-QDA .qdpx import integration tests
-// ---------------------------------------------------------------------------
-
 #[tokio::test]
 async fn qdpx_import_merge_mode_imports_documents_codes_and_annotations() {
     use crate::commands::qdpx_import::qdpx_import_internal;
@@ -1076,7 +1051,6 @@ async fn qdpx_import_merge_mode_imports_documents_codes_and_annotations() {
     .await
     .expect("Failed to create project");
 
-    // Build a minimal .qdpx ZIP fixture
     let qdpx_path = _temp_dir.path().join("fixture.qdpx");
     let file = std::fs::File::create(&qdpx_path).expect("Failed to create test QDPX");
     let mut zip = zip::ZipWriter::new(file);
@@ -1117,7 +1091,6 @@ async fn qdpx_import_merge_mode_imports_documents_codes_and_annotations() {
     zip.write_all(xml.as_bytes()).unwrap();
     zip.finish().unwrap();
 
-    // Import
     let pool_guard = state.db.read().await;
     let pool = pool_guard.as_ref().expect("No DB");
 
@@ -1216,7 +1189,6 @@ async fn qdpx_import_replace_mode_clears_existing_data() {
     .await
     .expect("Failed to create pre-existing code");
 
-    // Build the same .qdpx fixture
     let qdpx_path = _temp_dir.path().join("replace_fixture.qdpx");
     let file = std::fs::File::create(&qdpx_path).expect("Failed to create test QDPX");
     let mut zip = zip::ZipWriter::new(file);
@@ -1249,7 +1221,6 @@ async fn qdpx_import_replace_mode_clears_existing_data() {
     zip.write_all(xml.as_bytes()).unwrap();
     zip.finish().unwrap();
 
-    // Import in replace mode
     let pool_guard = state.db.read().await;
     let pool = pool_guard.as_ref().expect("No DB");
 
@@ -1334,7 +1305,6 @@ async fn qdpx_import_merge_mode_preserves_existing_data() {
     .await
     .expect("Failed to create pre-existing code");
 
-    // Build the .qdpx fixture
     let qdpx_path = _temp_dir.path().join("merge_fixture.qdpx");
     let file = std::fs::File::create(&qdpx_path).expect("Failed to create test QDPX");
     let mut zip = zip::ZipWriter::new(file);
@@ -1367,7 +1337,6 @@ async fn qdpx_import_merge_mode_preserves_existing_data() {
     zip.write_all(xml.as_bytes()).unwrap();
     zip.finish().unwrap();
 
-    // Import in merge mode
     let pool_guard = state.db.read().await;
     let pool = pool_guard.as_ref().expect("No DB");
 
@@ -1430,7 +1399,6 @@ async fn qdpx_import_rejects_missing_project_qde() {
     .await
     .expect("Failed to create project");
 
-    // Build a ZIP without project.qde
     let qdpx_path = _temp_dir.path().join("no_qde.qdpx");
     let file = std::fs::File::create(&qdpx_path).expect("Failed to create test QDPX");
     let mut zip = zip::ZipWriter::new(file);
@@ -1476,7 +1444,6 @@ async fn qdpx_import_rejects_malformed_xml() {
     .await
     .expect("Failed to create project");
 
-    // Build a ZIP with malformed XML
     let qdpx_path = _temp_dir.path().join("bad_xml.qdpx");
     let file = std::fs::File::create(&qdpx_path).expect("Failed to create test QDPX");
     let mut zip = zip::ZipWriter::new(file);
@@ -1522,7 +1489,6 @@ async fn qdpx_import_rejects_corrupted_zip() {
     .await
     .expect("Failed to create project");
 
-    // Write a file that is NOT a valid ZIP
     let qdpx_path = _temp_dir.path().join("corrupt.qdpx");
     let mut file = std::fs::File::create(&qdpx_path).expect("Failed to create test file");
     file.write_all(b"This is not a ZIP file at all. Just random bytes.").unwrap();
@@ -1565,7 +1531,6 @@ async fn qdpx_import_undo_restores_previous_data() {
 
     let _user_id = seed_local_user(&state).await;
 
-    // Create a document and code manually first
     let _doc = documents_import_internal(
         None,
         &state,
@@ -1603,7 +1568,6 @@ async fn qdpx_import_undo_restores_previous_data() {
         assert_eq!(code_count, 1);
     }
 
-    // Build a .qdpx fixture for replace import
     let qdpx_path = _temp_dir.path().join("undo_fixture.qdpx");
     let file = std::fs::File::create(&qdpx_path).expect("Failed to create test QDPX");
     let mut zip = zip::ZipWriter::new(file);

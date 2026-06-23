@@ -256,8 +256,6 @@ pub async fn codes_move_internal(
 
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
-    // Step 1: Delete all closure rows where the ancestor is OUTSIDE the subtree
-    // but the descendant IS in the subtree (stale parent links)
     sqlx::query(
         "DELETE FROM code_closure
          WHERE descendant IN (SELECT descendant FROM code_closure WHERE ancestor = ?)
@@ -269,7 +267,6 @@ pub async fn codes_move_internal(
     .await
     .map_err(|e| format!("Failed to delete stale closure rows: {}", e))?;
 
-    // Step 2: Re-insert links if new_parent_id is Some
     if let Some(parent_id) = new_parent_id {
         sqlx::query(
             "INSERT INTO code_closure (ancestor, descendant, depth)

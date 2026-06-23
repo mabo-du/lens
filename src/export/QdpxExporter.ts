@@ -72,7 +72,6 @@ export const QdpxExporter: ExportPlugin = {
     // Sources
     const sourcesEl = doc.createElement('Sources');
     for (const document of payload.documents) {
-      // Create TextSource
       const sourceEl = doc.createElement('TextSource');
       sourceEl.setAttribute('guid', document.id);
       sourceEl.setAttribute('name', document.title);
@@ -119,7 +118,6 @@ export const QdpxExporter: ExportPlugin = {
     const serializer = new XMLSerializer();
     const xmlString = `<?xml version="1.0" encoding="UTF-8"?>\n${serializer.serializeToString(doc)}`;
 
-    // Build ZIP
     const zip = new JSZip();
     zip.file('project.qde', xmlString);
     

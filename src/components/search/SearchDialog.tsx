@@ -70,7 +70,6 @@ export function SearchDialog() {
         let searchQuery = query.trim();
         let codeIdFilter: string | undefined;
 
-        // Parse code: prefix
         if (searchQuery.startsWith('code:')) {
           const rest = searchQuery.slice(5).trim();
           const spaceIdx = rest.indexOf(' ');

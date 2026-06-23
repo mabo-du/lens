@@ -22,7 +22,6 @@ export function ProjectJournalDialog({ open, onOpenChange }: { open: boolean, on
     }
   }, [open, activeProject]);
 
-  // Clean up pending write timeout on unmount
   useEffect(() => {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
