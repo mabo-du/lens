@@ -18,6 +18,7 @@ import { writeFile } from '@tauri-apps/plugin-fs';
 import { exportIpc } from '@/ipc/export';
 import { exporterRegistry } from '@/export/index';
 import { projectsIpc } from '@/ipc/projects';
+import { annotationsIpc } from '@/ipc/annotations';
 
 function TopNav({ onJournalOpen, onCloseProject }: { onJournalOpen: () => void; onCloseProject: () => void }) {
   const activeProject = useProjectStore(s => s.activeProject);
@@ -192,6 +193,67 @@ export function Workspace() {
   const centerPanelWidth = 100 - leftPanelWidth - rightPanelWidth;
   const [journalOpen, setJournalOpen] = useState(false);
   const setActiveProject = useProjectStore(s => s.setActiveProject);
+
+  // Undo/Redo keyboard shortcuts (ACTION_PLAN P4.6)
+  const undoAnnotation = useUiStore(s => s.undoAnnotation);
+  const redoAnnotation = useUiStore(s => s.redoAnnotation);
+  const fixStackTopAnnotation = useUiStore(s => s.fixStackTopAnnotation);
+  const undoingRef = useRef(false);
+
+  const executeUndoRedo = async (
+    entry: { action: 'delete' | 'create'; annotation: { id: string; documentId: string; codeId: string; startChar: number; endChar: number; createdBy: string; createdAt: string } },
+    targetStack: 'undo' | 'redo',
+  ) => {
+    try {
+      if (entry.action === 'delete') {
+        await annotationsIpc.delete(entry.annotation.id);
+        useProjectStore.getState().removeAnnotation(entry.annotation.id);
+      } else {
+        const created = await annotationsIpc.create({
+          documentId: entry.annotation.documentId,
+          codeId: entry.annotation.codeId,
+          startChar: entry.annotation.startChar,
+          endChar: entry.annotation.endChar,
+        });
+        useProjectStore.getState().addAnnotation(created);
+        // Fix the stack entry annotation ID so subsequent undo/redo targets the correct row
+        useUiStore.getState().fixStackTopAnnotation(targetStack, created);
+      }
+    } catch (err) {
+      console.error(`${targetStack === 'undo' ? 'Undo' : 'Redo'} failed:`, err);
+      toast.error(`${targetStack === 'undo' ? 'Undo' : 'Redo'} failed: ${err}`);
+    }
+  };
+
+  useEffect(() => {
+    const handler = async (e: KeyboardEvent) => {
+      if (e.key === 'z' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
+        e.preventDefault();
+        if (undoingRef.current) return;
+        undoingRef.current = true;
+        try {
+          const entry = undoAnnotation();
+          if (!entry) return;
+          await executeUndoRedo(entry, 'redo');
+        } finally {
+          undoingRef.current = false;
+        }
+      } else if ((e.key === 'z' && (e.metaKey || e.ctrlKey) && e.shiftKey) || (e.key === 'y' && (e.metaKey || e.ctrlKey))) {
+        e.preventDefault();
+        if (undoingRef.current) return;
+        undoingRef.current = true;
+        try {
+          const entry = useUiStore.getState().redoAnnotation();
+          if (!entry) return;
+          await executeUndoRedo(entry, 'undo');
+        } finally {
+          undoingRef.current = false;
+        }
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [undoAnnotation, redoAnnotation, fixStackTopAnnotation]);
 
   const handleCloseProject = async () => {
     try {

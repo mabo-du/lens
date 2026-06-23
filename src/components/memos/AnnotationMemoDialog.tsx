@@ -6,6 +6,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useProjectStore } from '@/store/projectStore';
+import { useUiStore } from '@/store/uiStore';
 import { CodeTreeNode } from '@/ipc/codes';
 import { memosIpc } from '@/ipc/memos';
 import { annotationsIpc } from '@/ipc/annotations';
@@ -21,6 +22,7 @@ export function AnnotationMemoDialog({ annotationId, onClose }: { annotationId: 
   const [isDeleting, setIsDeleting] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const removeAnnotation = useProjectStore(s => s.removeAnnotation);
+  const pushUndo = useUiStore(s => s.pushUndo);
 
   const annotation = annotations.find(a => a.id === annotationId);
   // flatten codes to find name
@@ -91,6 +93,10 @@ export function AnnotationMemoDialog({ annotationId, onClose }: { annotationId: 
                 if (!confirm('Delete this annotation? This cannot be undone.')) return;
                 setIsDeleting(true);
                 try {
+                  // Push undo entry before deleting (ACTION_PLAN P4.6)
+                  if (annotation) {
+                    pushUndo({ action: 'create', annotation });
+                  }
                   await annotationsIpc.delete(annotationId);
                   removeAnnotation(annotationId);
                   onClose();
