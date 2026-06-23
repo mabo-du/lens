@@ -10,7 +10,8 @@ import { projectsIpc } from "./ipc/projects";
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { useUiStore } from './store/uiStore';
 import { qdpxImportIpc } from './ipc/qdpx_import';
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { EncryptionDialog } from './components/settings/EncryptionDialog';
 import { Beaker, FolderOpen, Plus, Upload, X } from 'lucide-react';
 import "./App.css";
 
@@ -47,6 +48,28 @@ function App() {
   const recentProjects = useUiStore(s => s.recentProjects);
   const removeRecentProject = useUiStore(s => s.removeRecentProject);
 
+  // Encryption dialog state
+  const [encryptOpen, setEncryptOpen] = useState(false);
+  const [encryptMode, setEncryptMode] = useState<'create' | 'unlock'>('create');
+  const encryptResolve = useRef<((pw: string | null) => void) | null>(null);
+  const promptEncryption = useCallback((mode: 'create' | 'unlock'): Promise<string | null> => {
+    return new Promise((resolve) => {
+      encryptResolve.current = resolve;
+      setEncryptMode(mode);
+      setEncryptOpen(true);
+    });
+  }, []);
+  const handleEncryptConfirm = (password: string) => {
+    encryptResolve.current?.(password);
+    encryptResolve.current = null;
+    setEncryptOpen(false);
+  };
+  const handleEncryptCancel = () => {
+    encryptResolve.current?.(null);
+    encryptResolve.current = null;
+    setEncryptOpen(false);
+  };
+
   const loadProjectData = async (proj: { id: string; name: string; description: string | null; createdAt: string; updatedAt: string }, folderPath: string) => {
     setActiveProject(proj);
     const docs = await documentsIpc.list(proj.id);
@@ -66,8 +89,9 @@ function App() {
         let encryptionKey: string | undefined;
         const encrypted = await projectsIpc.isEncrypted(selected);
         if (encrypted) {
-          encryptionKey = prompt('This project is encrypted. Enter password:') ?? undefined;
-          if (!encryptionKey) return;
+          const pw = await promptEncryption('unlock');
+          if (!pw) return;
+          encryptionKey = pw;
         }
         const proj = await projectsIpc.open(selected, encryptionKey ?? undefined);
         await loadProjectData(proj, selected);
@@ -140,16 +164,7 @@ function App() {
     const selected = await openDialog({ directory: true });
     if (selected && typeof selected === 'string') {
       try {
-        // Optionally encrypt
-        const useEncryption = confirm('Enable database encryption? (Cancel to skip)');
-        let encryptionKey: string | undefined;
-        if (useEncryption) {
-          encryptionKey = prompt('Enter encryption password (min 8 chars, remember it — it cannot be recovered):') ?? undefined;
-          if (!encryptionKey || encryptionKey.length < 8) {
-            if (encryptionKey) toast.error('Password must be at least 8 characters');
-            return;
-          }
-        }
+        const encryptionKey = await promptEncryption('create');
         const proj = await projectsIpc.create("New Project", "", selected, encryptionKey ?? undefined);
         const folderPath = `${selected}/${proj.name}`;
         setActiveProject(proj);
@@ -167,7 +182,14 @@ function App() {
 
   if (!activeProject) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-100">
+      <>
+        <EncryptionDialog
+          open={encryptOpen}
+          mode={encryptMode}
+          onConfirm={handleEncryptConfirm}
+          onCancel={handleEncryptCancel}
+        />
+        <div className="flex h-screen items-center justify-center bg-slate-100">
         <div className="p-8 bg-white shadow-md rounded-lg text-center space-y-6">
           <div className="mx-auto w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center mb-4">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
@@ -223,11 +245,18 @@ function App() {
           <Toaster />
         </div>
       </div>
+      </>
     );
   }
 
   return (
     <>
+      <EncryptionDialog
+        open={encryptOpen}
+        mode={encryptMode}
+        onConfirm={handleEncryptConfirm}
+        onCancel={handleEncryptCancel}
+      />
       <Workspace />
       <Toaster />
     </>
