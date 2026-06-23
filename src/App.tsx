@@ -12,7 +12,7 @@ import { useUiStore } from './store/uiStore';
 import { qdpxImportIpc } from './ipc/qdpx_import';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { EncryptionDialog } from './components/settings/EncryptionDialog';
-import { Beaker, FolderOpen, Plus, Upload, X } from 'lucide-react';
+import { Beaker, FolderOpen, Plus, X } from 'lucide-react';
 import "./App.css";
 
 function App() {
@@ -211,10 +211,7 @@ function App() {
               <FolderOpen className="w-4 h-4" />
               <span>Open Project</span>
             </button>
-            <button onClick={handleQdpxImport} disabled={!activeProject} className="px-4 py-2 bg-slate-200 text-slate-800 rounded hover:bg-slate-300 flex items-center justify-center space-x-2 disabled:opacity-40">
-              <Upload className="w-4 h-4" />
-              <span>Import REFI-QDA</span>
-            </button>
+
           </div>
           {recentProjects.length > 0 && (
             <div className="mt-6 pt-4 border-t border-slate-200">
@@ -257,7 +254,7 @@ function App() {
         onConfirm={handleEncryptConfirm}
         onCancel={handleEncryptCancel}
       />
-      <Workspace />
+      <Workspace onImportQdpx={handleQdpxImport} />
       <Toaster />
     </>
   );

@@ -9,7 +9,7 @@ import { FuzzyCodePicker } from '../editor/FuzzyCodePicker';
 import { ProjectJournalDialog } from '../memos/ProjectJournalDialog';
 import { SearchDialog } from '../search/SearchDialog';
 import { useProjectStore } from '@/store/projectStore';
-import { Book, Download, LogOut, Pencil, Settings, HelpCircle } from 'lucide-react';
+import { Book, Download, LogOut, Pencil, Settings, HelpCircle, Upload } from 'lucide-react';
 import React, { useState, ReactNode, useRef, useEffect } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
@@ -22,7 +22,7 @@ import { annotationsIpc } from '@/ipc/annotations';
 import { SettingsDialog } from '../settings/SettingsDialog';
 import { HelpDialog } from '../settings/HelpDialog';
 
-function TopNav({ onJournalOpen, onCloseProject, onSettingsOpen, onHelpOpen }: { onJournalOpen: () => void; onCloseProject: () => void; onSettingsOpen: () => void; onHelpOpen: () => void }) {
+function TopNav({ onJournalOpen, onCloseProject, onSettingsOpen, onHelpOpen, onImportQdpx }: { onJournalOpen: () => void; onCloseProject: () => void; onSettingsOpen: () => void; onHelpOpen: () => void; onImportQdpx?: () => void }) {
   const activeProject = useProjectStore(s => s.activeProject);
   const setActiveProject = useProjectStore(s => s.setActiveProject);
   const [exporting, setExporting] = useState(false);
@@ -139,6 +139,16 @@ function TopNav({ onJournalOpen, onCloseProject, onSettingsOpen, onHelpOpen }: {
             </PopoverContent>
           </Popover>
         )}
+        {activeProject && onImportQdpx && (
+          <button
+            className="flex items-center space-x-2 hover:bg-slate-700 px-3 py-1.5 rounded transition-colors text-sm"
+            onClick={onImportQdpx}
+            title="Import REFI-QDA project (.qdpx)"
+          >
+            <Upload className="w-4 h-4" />
+            <span>Import REFI-QDA</span>
+          </button>
+        )}
         <button 
           className="flex items-center space-x-2 hover:bg-slate-700 px-3 py-1.5 rounded transition-colors text-sm"
           onClick={onJournalOpen}
@@ -194,7 +204,7 @@ class PanelErrorBoundary extends React.Component<
   }
 }
 
-export function Workspace() {
+export function Workspace({ onImportQdpx }: { onImportQdpx?: () => void }) {
   const leftPanelWidth = useUiStore(s => s.leftPanelWidth);
   const rightPanelWidth = useUiStore(s => s.rightPanelWidth);
   const setLeftPanelWidth = useUiStore(s => s.setLeftPanelWidth);
@@ -284,7 +294,7 @@ export function Workspace() {
 
   return (
     <div className="flex flex-col h-screen w-full bg-slate-100 font-sans">
-      <TopNav onJournalOpen={() => setJournalOpen(true)} onCloseProject={handleCloseProject} onSettingsOpen={() => setSettingsOpen(true)} onHelpOpen={() => setHelpOpen(true)} />
+      <TopNav onJournalOpen={() => setJournalOpen(true)} onCloseProject={handleCloseProject} onSettingsOpen={() => setSettingsOpen(true)} onHelpOpen={() => setHelpOpen(true)} onImportQdpx={onImportQdpx} />
       <Group
         onLayoutChanged={(sizes) => {
           // react-resizable-panels v4 passes sizes as a Record<string, number>
