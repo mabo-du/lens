@@ -77,7 +77,7 @@ pub async fn documents_list(
 
     // Use the exact same SQL output mapping as import
     let docs = sqlx::query_as::<_, Document>(
-        "SELECT id, project_id, title, original_path, file_format, text_hash, extractor_id, word_count, imported_at, sort_order FROM document WHERE project_id = ? ORDER BY sort_order"
+        "SELECT id, project_id, title, original_path, file_format, plain_text, text_hash, extractor_id, word_count, imported_at, sort_order FROM document WHERE project_id = ? ORDER BY sort_order"
     )
     .bind(&project_id)
     .fetch_all(pool)

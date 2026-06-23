@@ -29,11 +29,18 @@ function CodeMemoPanel({ code, onClose }: { code: CodeTreeNode, onClose: () => v
     memosIpc.get(code.projectId, code.id).then(m => setContent(m?.body || ''));
   }, [code]);
 
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
+
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setContent(e.target.value);
+    const value = e.target.value; // capture before timeout (ACTION_PLAN B4)
+    setContent(value);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
-      memosIpc.save(code.projectId, e.target.value, code.id);
+      memosIpc.save(code.projectId, value, code.id);
     }, 1000);
   };
 
@@ -178,7 +185,7 @@ export function CodeTree() {
     setDeleteNode,
   }), []);
 
-  const handleMove = async ({ dragIds, parentId }: any) => {
+  const handleMove = async ({ dragIds, parentId }: { dragIds: string[]; parentId: string | null }) => {
     if (!activeProject) return;
     for (const id of dragIds) {
       await codesIpc.move(id, parentId ?? null);
