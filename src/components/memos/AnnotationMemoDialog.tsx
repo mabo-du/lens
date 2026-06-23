@@ -8,6 +8,8 @@ import {
 import { useProjectStore } from '@/store/projectStore';
 import { CodeTreeNode } from '@/ipc/codes';
 import { memosIpc } from '@/ipc/memos';
+import { annotationsIpc } from '@/ipc/annotations';
+import { toast } from 'sonner';
 
 export function AnnotationMemoDialog({ annotationId, onClose }: { annotationId: string | null, onClose: () => void }) {
   const activeProject = useProjectStore(s => s.activeProject);
@@ -16,7 +18,9 @@ export function AnnotationMemoDialog({ annotationId, onClose }: { annotationId: 
   
   const [content, setContent] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const removeAnnotation = useProjectStore(s => s.removeAnnotation);
 
   const annotation = annotations.find(a => a.id === annotationId);
   // flatten codes to find name
@@ -78,8 +82,31 @@ export function AnnotationMemoDialog({ annotationId, onClose }: { annotationId: 
             value={content}
             onChange={handleChange}
           />
-          <div className="absolute bottom-3 right-4 text-xs text-slate-400">
-            {isSaving ? 'Saving...' : 'Saved'}
+          <div className="absolute bottom-3 right-4 flex items-center space-x-3">
+            <button
+              className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50"
+              disabled={isDeleting}
+              onClick={async () => {
+                if (!annotationId || !activeProject) return;
+                if (!confirm('Delete this annotation? This cannot be undone.')) return;
+                setIsDeleting(true);
+                try {
+                  await annotationsIpc.delete(annotationId);
+                  removeAnnotation(annotationId);
+                  onClose();
+                } catch (e) {
+                  console.error('Failed to delete annotation', e);
+                  toast.error('Failed to delete annotation');
+                } finally {
+                  setIsDeleting(false);
+                }
+              }}
+            >
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </button>
+            <span className="text-xs text-slate-400">
+              {isSaving ? 'Saving...' : 'Saved'}
+            </span>
           </div>
         </div>
       </DialogContent>
