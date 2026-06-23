@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://use-charter.dev/schema/charter.schema.json
+policy:
+  profile: standard
+
+toolchain:
+  node:
+    version: ">=20"
+    packageManager: npm
+  rust:
+    version: ">=1.75"
+
+hooks:
+  pre-commit:
+    - npx tsc --noEmit
+  pre-push:
+    - npx tsc --noEmit && cd src-tauri && cargo test

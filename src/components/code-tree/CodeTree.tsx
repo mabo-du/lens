@@ -11,17 +11,26 @@ import { Plus, Trash2, Edit2, FileText } from 'lucide-react';
 import { memosIpc } from '@/ipc/memos';
 import { toast } from 'sonner';
 
+/** Common code node fields used by context menu callbacks (avoids double type cast). */
+export interface CodeNodeMeta {
+  id: string;
+  projectId: string;
+  name: string;
+  color: string;
+  description: string | null;
+}
+
 export const CodeTreeContext = React.createContext<{
-  setEditNode: (node: CodeTreeNode) => void;
-  setMemoNode: (node: CodeTreeNode) => void;
-  setDeleteNode: (node: CodeTreeNode) => void;
+  setEditNode: (node: CodeNodeMeta) => void;
+  setMemoNode: (node: CodeNodeMeta) => void;
+  setDeleteNode: (node: CodeNodeMeta) => void;
 }>({
   setEditNode: () => {},
   setMemoNode: () => {},
   setDeleteNode: () => {},
 });
 
-function CodeMemoPanel({ code, onClose }: { code: CodeTreeNode, onClose: () => void }) {
+function CodeMemoPanel({ code, onClose }: { code: CodeNodeMeta, onClose: () => void }) {
   const [content, setContent] = useState('');
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -126,13 +135,13 @@ function CodeNode({ node, style, dragHandle }: NodeRendererProps<ArboristNode>) 
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem onClick={() => ctx.setEditNode(node.data as unknown as CodeTreeNode)}>
+        <ContextMenuItem onClick={() => ctx.setEditNode(node.data)}>
           <Edit2 className="w-4 h-4 mr-2" /> Edit Code
         </ContextMenuItem>
-        <ContextMenuItem onClick={() => ctx.setMemoNode(node.data as unknown as CodeTreeNode)}>
+        <ContextMenuItem onClick={() => ctx.setMemoNode(node.data)}>
           <FileText className="w-4 h-4 mr-2" /> Edit Memo
         </ContextMenuItem>
-        <ContextMenuItem onClick={() => ctx.setDeleteNode(node.data as unknown as CodeTreeNode)} className="text-red-600 focus:text-red-600">
+        <ContextMenuItem onClick={() => ctx.setDeleteNode(node.data)} className="text-red-600 focus:text-red-600">
           <Trash2 className="w-4 h-4 mr-2" /> Delete Code
         </ContextMenuItem>
       </ContextMenuContent>
@@ -159,9 +168,9 @@ export function CodeTree() {
   }, []);
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [editNode, setEditNode] = useState<CodeTreeNode | null>(null);
-  const [memoNode, setMemoNode] = useState<CodeTreeNode | null>(null);
-  const [deleteNode, setDeleteNode] = useState<CodeTreeNode | null>(null);
+  const [editNode, setEditNode] = useState<CodeNodeMeta | null>(null);
+  const [memoNode, setMemoNode] = useState<CodeNodeMeta | null>(null);
+  const [deleteNode, setDeleteNode] = useState<CodeNodeMeta | null>(null);
 
   useEffect(() => {
     if (deleteNode) {
@@ -187,7 +196,7 @@ export function CodeTree() {
   }, [deleteNode, activeProject, setCodes]);
 
   const contextValue = useMemo(() => ({
-    setEditNode: (n: CodeTreeNode) => { setEditNode(n); setCreateOpen(true); },
+    setEditNode: (n: CodeNodeMeta) => { setEditNode(n); setCreateOpen(true); },
     setMemoNode,
     setDeleteNode,
   }), []);

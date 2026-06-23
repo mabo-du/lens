@@ -1,6 +1,10 @@
 <!-- gitnexus:start -->
 # GitNexus — LENS
 
+Qualitative Data Analysis (QDA) desktop app. **Stack:** Tauri 2 (Rust backend + React 19/TypeScript 5 frontend), SQLite via sqlx, TailwindCSS 4, Zustand 5, ProseMirror.
+
+**Verify:** `npx tsc --noEmit && (cd src-tauri && cargo test && cargo build)`
+
 Index: 55 symbols, 52 relationships. Run `npx gitnexus analyze` if stale.
 
 ## Rules
@@ -12,9 +16,12 @@ Index: 55 symbols, 52 relationships. Run `npx gitnexus analyze` if stale.
 
 ## Off-Limits
 
-- Do NOT modify `.gitnexus/`, schema migration files, or `.ctx/` configuration.
+- Do NOT modify `.gitnexus/`, `.ctx/`, `.beads/`, `.charter/`, or `.claude/` configuration.
+- Do NOT modify `src-tauri/src/db/migrations/` or `schemas/` without explicit approval.
+- Do NOT modify `.github/workflows/`, CI/CD config, or deploy scripts.
 - Do NOT install global packages or modify system configuration.
 - Do NOT push, force-push, or rewrite published branches.
+- Do NOT touch `.env*` files; use `.env.example` for reference.
 
 ## Resources
 

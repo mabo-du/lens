@@ -9,21 +9,25 @@ import { searchIpc, SearchResult } from '@/ipc/search';
 import { flattenCodeTree } from '@/components/editor/QdaAnnotationPlugin';
 import { Search as SearchIcon, FileText, File, Info } from 'lucide-react';
 
-function escapeSnippet(raw: string) {
-  const parts = raw.split(/(<\/?mark>)/);
-  const escaped = parts.map(part => {
-    if (part === '<mark>' || part === '</mark>') return part;
-    return part.replace(/[&<>"']/g, m => ({
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;'
-    }[m] as string));
-  }).join('');
-  // Defense-in-depth: strip any angle-bracket content that isn't
-  // <mark> or </mark> (ACTION_PLAN §P2.6).
-  return escaped.replace(/<(?!(?:\/?mark>))/g, '&lt;');
+function HighlightedSnippet({ snippet }: { snippet: string }) {
+  const parts = snippet.split(/(<\/?mark>)/);
+  const result: React.ReactNode[] = [];
+  let inMark = false;
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    if (part === '<mark>') {
+      inMark = true;
+    } else if (part === '</mark>') {
+      inMark = false;
+    } else if (part) {
+      if (inMark) {
+        result.push(<mark key={i} className="bg-yellow-200 text-slate-900 font-medium px-0.5 rounded-sm">{part}</mark>);
+      } else {
+        result.push(part);
+      }
+    }
+  }
+  return <>{result}</>;
 }
 
 export function SearchDialog() {
@@ -165,10 +169,9 @@ export function SearchDialog() {
                           <File className="w-4 h-4 mr-2 text-blue-500" />
                           {r.sourceName}
                         </div>
-                        <div 
-                          className="text-xs text-slate-600 pl-6 leading-relaxed line-clamp-2 [&>mark]:bg-yellow-200 [&>mark]:text-slate-900 [&>mark]:font-medium [&>mark]:px-0.5 [&>mark]:rounded-sm"
-                          dangerouslySetInnerHTML={{ __html: escapeSnippet(r.snippet) }}
-                        />
+                        <div className="text-xs text-slate-600 pl-6 leading-relaxed line-clamp-2">
+                          <HighlightedSnippet snippet={r.snippet} />
+                        </div>
                       </button>
                     ))}
                   </div>
@@ -189,10 +192,9 @@ export function SearchDialog() {
                           <FileText className="w-4 h-4 mr-2 text-purple-500" />
                           {r.sourceName}
                         </div>
-                        <div 
-                          className="text-xs text-slate-600 pl-6 leading-relaxed line-clamp-2 [&>mark]:bg-yellow-200 [&>mark]:text-slate-900 [&>mark]:font-medium [&>mark]:px-0.5 [&>mark]:rounded-sm"
-                          dangerouslySetInnerHTML={{ __html: escapeSnippet(r.snippet) }}
-                        />
+                        <div className="text-xs text-slate-600 pl-6 leading-relaxed line-clamp-2">
+                          <HighlightedSnippet snippet={r.snippet} />
+                        </div>
                       </button>
                     ))}
                   </div>
