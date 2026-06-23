@@ -100,10 +100,10 @@ export function CodeDialog({ open, onOpenChange, codeToEdit, initialParentId }: 
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Name</label>
+            <label htmlFor="code-name" className="text-sm font-medium">Name</label>
             <input
+              id="code-name"
               type="text"
-              autoFocus
               className="w-full px-3 py-2 border rounded-md"
               value={name}
               onChange={e => setName(e.target.value)}
@@ -112,52 +112,58 @@ export function CodeDialog({ open, onOpenChange, codeToEdit, initialParentId }: 
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Color</label>
-            <div className="flex flex-wrap gap-2 mb-2">
-              {/* Auto-assign option (only when creating, not editing) */}
-              {!codeToEdit && (
-                <button
-                  type="button"
-                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-[10px] leading-none font-bold ${color === null ? 'border-slate-900 scale-110 bg-slate-100' : 'border-slate-200 bg-slate-50 text-slate-400 hover:border-slate-400'}`}
-                  onClick={() => setColor(null)}
-                  title="Auto-assign from palette"
-                >
-                  A
-                </button>
-              )}
-              {PRESET_COLORS.map(c => (
-                <button
-                  key={c}
-                  type="button"
-                  className={`w-6 h-6 rounded-full border-2 ${color === c ? 'border-slate-900 scale-110' : 'border-transparent'}`}
-                  style={{ backgroundColor: c }}
-                  onClick={() => setColor(c)}
+            <fieldset className="border-0 p-0 m-0">
+              <legend className="text-sm font-medium px-0">Color</legend>
+              <div className="flex flex-wrap gap-2 mb-2 mt-2">
+                {/* Auto-assign option (only when creating, not editing) */}
+                {!codeToEdit && (
+                  <button
+                    type="button"
+                    className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-[10px] leading-none font-bold ${color === null ? 'border-slate-900 scale-110 bg-slate-100' : 'border-slate-200 bg-slate-50 text-slate-400 hover:border-slate-400'}`}
+                    onClick={() => setColor(null)}
+                    title="Auto-assign from palette"
+                  >
+                    A
+                  </button>
+                )}
+                {PRESET_COLORS.map(c => (
+                  <button
+                    key={c}
+                    type="button"
+                    className={`w-6 h-6 rounded-full border-2 ${color === c ? 'border-slate-900 scale-110' : 'border-transparent'}`}
+                    style={{ backgroundColor: c }}
+                    onClick={() => setColor(c)}
+                    aria-label={`Set color to ${c}`}
+                  />
+                ))}
+              </div>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="color"
+                  value={color ?? '#6366f1'}
+                  onChange={e => setColor(e.target.value)}
+                  aria-label="Custom color picker"
+                  className="w-8 h-8 rounded cursor-pointer"
+                  disabled={color === null}
                 />
-              ))}
-            </div>
-            <div className="flex items-center space-x-2">
-              <input 
-                type="color" 
-                value={color ?? '#6366f1'} 
-                onChange={e => setColor(e.target.value)} 
-                className="w-8 h-8 rounded cursor-pointer"
-                disabled={color === null}
-              />
-              <input
-                type="text"
-                value={color ?? ''}
-                onChange={e => setColor(e.target.value || null)}
-                placeholder="Auto (palette assigned)"
-                className="flex-1 px-3 py-1 border rounded-md font-mono text-sm uppercase"
-                pattern="^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"
-              />
-            </div>
+                <input
+                  type="text"
+                  value={color ?? ''}
+                  onChange={e => setColor(e.target.value || null)}
+                  placeholder="Auto (palette assigned)"
+                  aria-label="Custom color hex value"
+                  className="flex-1 px-3 py-1 border rounded-md font-mono text-sm uppercase"
+                  pattern="^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"
+                />
+              </div>
+            </fieldset>
           </div>
 
           {!codeToEdit && (
             <div className="space-y-2">
-              <label className="text-sm font-medium">Parent Code</label>
+              <label htmlFor="code-parent" className="text-sm font-medium">Parent Code</label>
               <select
+                id="code-parent"
                 className="w-full px-3 py-2 border rounded-md"
                 value={parentId || ''}
                 onChange={e => setParentId(e.target.value || null)}
@@ -173,8 +179,9 @@ export function CodeDialog({ open, onOpenChange, codeToEdit, initialParentId }: 
           )}
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Description</label>
+            <label htmlFor="code-description" className="text-sm font-medium">Description</label>
             <textarea
+              id="code-description"
               className="w-full px-3 py-2 border rounded-md h-24 resize-none"
               value={description}
               onChange={e => setDescription(e.target.value)}

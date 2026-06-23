@@ -87,14 +87,17 @@ export function EncryptionDialog({
 
         <div className="space-y-4 mt-2">
           <div>
+            <label htmlFor="enc-password" className="sr-only">
+              {mode === 'create' ? 'Encryption password' : 'Password'}
+            </label>
             <input
+              id="enc-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
               placeholder={mode === 'create' ? 'Encryption password' : 'Password'}
               className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              autoFocus
             />
             {mode === 'create' && password && (
               <div className="mt-2">
@@ -111,12 +114,15 @@ export function EncryptionDialog({
 
           {mode === 'create' && (
             <div>
+              <label htmlFor="enc-confirm" className="sr-only">
+                Confirm password
+              </label>
               <input
+                id="enc-confirm"
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                placeholder="Confirm password"
                 className="w-full px-3 py-2 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>

@@ -78,11 +78,12 @@ export function SettingsDialog({
         <div className="space-y-6 mt-2">
           {/* Display Name */}
           <div>
-            <label className="text-sm font-medium text-slate-700 block mb-1.5">
+            <label htmlFor="display-name" className="text-sm font-medium text-slate-700 block mb-1.5">
               Display Name
             </label>
             <div className="flex space-x-2">
               <input
+                id="display-name"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
@@ -104,14 +105,16 @@ export function SettingsDialog({
           </div>
 
           {/* Theme */}
-          <div>
-            <label className="text-sm font-medium text-slate-700 block mb-1.5">
+          <fieldset>
+            <legend className="text-sm font-medium text-slate-700 block mb-1.5">
               Theme
-            </label>
-            <div className="flex space-x-2">
+            </legend>
+            <div role="radiogroup" aria-label="Theme" className="flex space-x-2">
               {(['light', 'dark', 'system'] as const).map((t) => (
                 <button
                   key={t}
+                  role="radio"
+                  aria-checked={theme === t}
                   onClick={() => applyTheme(t)}
                   className={`flex-1 px-3 py-1.5 text-sm rounded border transition-colors ${
                     theme === t
@@ -123,18 +126,20 @@ export function SettingsDialog({
                 </button>
               ))}
             </div>
-          </div>
+          </fieldset>
 
           {/* Default Code Color */}
-          <div>
-            <label className="text-sm font-medium text-slate-700 block mb-1.5">
+          <fieldset>
+            <legend className="text-sm font-medium text-slate-700 block mb-1.5">
               Default Code Color
-            </label>
-            <div className="flex flex-wrap gap-2">
+            </legend>
+            <div role="group" aria-label="Default code color palette" className="flex flex-wrap gap-2">
               {PALETTE.map((color) => (
                 <button
                   key={color}
                   onClick={() => setDefaultCodeColor(color)}
+                  aria-pressed={defaultCodeColor === color}
+                  aria-label={`Set default code color to ${color}`}
                   className={`w-7 h-7 rounded-full border-2 transition-all ${
                     defaultCodeColor === color
                       ? 'border-slate-800 scale-110 shadow-md'
@@ -148,7 +153,7 @@ export function SettingsDialog({
             <p className="text-xs text-slate-400 mt-1">
               Used when auto-assigning colors to new codes.
             </p>
-          </div>
+          </fieldset>
         </div>
       </DialogContent>
     </Dialog>

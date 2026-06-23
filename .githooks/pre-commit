@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Pre-commit hook for LENS.
+# Wire it in once after cloning with:
+#   git config core.hooksPath .githooks
+# Then chmod +x .githooks/pre-commit so it's executable.
+#
+# Note: we intentionally run `cargo test` (not `cargo test --locked`) here
+# because adding a new dev-dependency locally refreshes Cargo.lock, and
+# `--locked` would block the commit unnecessarily. CI uses `--locked`
+# for reproducibility in `.github/workflows/ci.yml`.
+
+set -euo pipefail
+
+echo "[pre-commit] Running typecheck..."
+npx tsc --noEmit
+
+echo "[pre-commit] Running cargo test (src-tauri)..."
+(
+  cd src-tauri
+  cargo test
+)
+
+echo "[pre-commit] OK"

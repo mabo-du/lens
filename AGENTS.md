@@ -38,8 +38,17 @@ Index: 55 symbols, 52 relationships. Run `npx gitnexus analyze` if stale.
 
 ## Hooks
 
-- `charter.yaml` configures pre-commit (`npx tsc --noEmit`) and pre-push (`npx tsc --noEmit && cargo test`).
-- CI: `.github/workflows/charter.yaml` runs Charter on PRs and pushes to main.
+After cloning, wire in the git hooks with:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Then `.githooks/pre-commit` will run `npx tsc --noEmit` and `cargo test --locked` automatically before each commit.
+
+chmod +x .githooks/pre-commit is required after `git config core.hooksPath` so the hook is executable.
+- `charter.yaml` documents the hook scripts run on pre-commit (`npx tsc --noEmit`, `cargo test --locked`) and pre-push.
+- CI: `.github/workflows/ci.yml` (TypeScript build + Rust matrix on ubuntu/windows/macos) and `.github/workflows/charter.yaml` (Charter quality gate).
 
 ## Resources
 

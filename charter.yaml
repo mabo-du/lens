@@ -12,5 +12,7 @@ toolchain:
 hooks:
   pre-commit:
     - npx tsc --noEmit
+    - '(cd src-tauri && cargo test)'
   pre-push:
-    - npx tsc --noEmit && cd src-tauri && cargo test
+    - npx tsc --noEmit
+    - '(cd src-tauri && cargo test)'

@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   frontend:
-    name: TypeScript + Lint
+    name: TypeScript + Build
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.0
@@ -36,8 +36,15 @@ jobs:
           fi
 
   rust:
-    name: Rust tests
-    runs-on: ubuntu-22.04
+    name: Rust tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-22.04
+          - windows-latest
+          - macos-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.0
 
@@ -45,7 +52,8 @@ jobs:
         with:
           cache: true
 
-      - name: Install system dependencies
+      - name: Tauri Linux deps
+        if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -57,10 +65,13 @@ jobs:
             libsoup-3.0-dev \
             libjavascriptcoregtk-4.1-dev
 
+      # macOS / Windows need no extra system deps for `cargo test`
+      # (the pdfplumber sidecar Python step only runs in release.yml).
+
       - name: Cargo build
         working-directory: src-tauri
-        run: cargo build
+        run: cargo build --locked
 
       - name: Cargo test
         working-directory: src-tauri
-        run: cargo test --verbose
+        run: cargo test --verbose --locked

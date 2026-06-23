@@ -118,16 +118,27 @@ function CodeNode({ node, style, dragHandle }: NodeRendererProps<ArboristNode>) 
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleClick();
+    }
+  };
+
   return (
     <ContextMenu>
       <ContextMenuTrigger className="block w-full">
-        <div 
-          style={style} 
-          ref={dragHandle} 
-          className={`flex items-center group cursor-pointer ${node.isSelected ? 'bg-slate-200' : 'hover:bg-slate-100'} px-2 py-1 rounded-md ${textSelection ? 'animate-pulse hover:bg-blue-100' : ''}`}
+        <div
+          style={style}
+          ref={dragHandle}
+          role="button"
+          tabIndex={0}
           onClick={handleClick}
+          onKeyDown={handleKeyDown}
+          aria-label={`Select code ${node.data.name}`}
+          className={`flex items-center group cursor-pointer ${node.isSelected ? 'bg-slate-200' : 'hover:bg-slate-100'} px-2 py-1 rounded-md ${textSelection ? 'animate-pulse hover:bg-blue-100' : ''}`}
         >
-          <div 
+          <div
             className="w-3 h-3 rounded-full mr-2 shrink-0 border border-black/20"
             style={{ backgroundColor: node.data.color }}
           />
