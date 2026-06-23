@@ -23,6 +23,9 @@ pub async fn search_query_internal(
     if trimmed.is_empty() {
         return Err("Search query must not be empty".to_string());
     }
+    if trimmed.len() > 500 {
+        return Err("Search query must be 500 characters or fewer".to_string());
+    }
 
     let pool_guard = state.db.read().await;
     let pool = pool_guard.as_ref().ok_or("No project open")?;
