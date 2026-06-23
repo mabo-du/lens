@@ -6,6 +6,7 @@ import {
 import { useProjectStore } from '@/store/projectStore';
 import { useUiStore } from '@/store/uiStore';
 import { searchIpc, SearchResult } from '@/ipc/search';
+import { flattenCodeTree } from '@/components/editor/QdaAnnotationPlugin';
 import { Search as SearchIcon, FileText, File, Info } from 'lucide-react';
 
 function escapeSnippet(raw: string) {
@@ -62,7 +63,23 @@ export function SearchDialog() {
     setIsSearching(true);
     const timeoutId = setTimeout(async () => {
       try {
-        const res = await searchIpc.query(activeProject.id, query.trim());
+        let searchQuery = query.trim();
+        let codeIdFilter: string | undefined;
+
+        // Parse code: prefix (ACTION_PLAN P3.8)
+        if (searchQuery.startsWith('code:')) {
+          const rest = searchQuery.slice(5).trim();
+          const spaceIdx = rest.indexOf(' ');
+          const codeName = spaceIdx > 0 ? rest.slice(0, spaceIdx) : rest;
+          searchQuery = spaceIdx > 0 ? rest.slice(spaceIdx + 1).trim() : '';
+
+          // Look up code by name
+          const flatCodes = flattenCodeTree(useProjectStore.getState().codes);
+          const matched = flatCodes.find(c => c.name.toLowerCase() === codeName.toLowerCase());
+          if (matched) codeIdFilter = matched.id;
+        }
+
+        const res = await searchIpc.query(activeProject.id, searchQuery, codeIdFilter);
         setResults(res);
       } catch (err) {
         console.error('Search failed:', err);
@@ -78,10 +95,18 @@ export function SearchDialog() {
     if (r.sourceType === 'document') {
       setActiveDocument(r.sourceId);
     } else if (r.sourceType === 'memo') {
-      // For MVP, just open the project journal if it's the project journal, 
-      // or we can just let them navigate manually.
-      // But navigating to the exact memo requires opening the code or annotation.
-      console.log('Clicked memo:', r.sourceName);
+      // Navigate to the linked code or annotation (ACTION_PLAN P3.9)
+      const codes = useProjectStore.getState().codes;
+      const flatCodes = flattenCodeTree(codes);
+      // r.sourceName format: "Memo for CodeName" or "Memo for Annotation" or "Project Journal"
+      const codeMatch = r.sourceName.match(/^Memo for (.+)$/);
+      if (codeMatch && codeMatch[1] !== 'Annotation') {
+        const code = flatCodes.find(c => c.name === codeMatch[1]);
+        if (code) {
+          const uiState = useUiStore.getState();
+          uiState.setActiveCodeView(code.id);
+        }
+      }
     }
     setOpen(false);
   };
