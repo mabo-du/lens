@@ -180,7 +180,8 @@ pub async fn annotations_list_by_code(
     let segments = sqlx::query_as::<_, AnnotationSegmentRecord>(
         "SELECT s.id, s.document_id, s.code_id, s.created_by, s.created_at, 
                 ts.start_char, ts.end_char, 
-                d.title, d.plain_text
+                d.title, 
+                SUBSTR(d.plain_text, ts.start_char + 1, ts.end_char - ts.start_char) as plain_text
          FROM selection s
          JOIN text_selection ts ON ts.selection_id = s.id
          JOIN document d ON d.id = s.document_id
