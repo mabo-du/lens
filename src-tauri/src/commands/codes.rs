@@ -303,7 +303,7 @@ pub async fn codes_update(
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
     if let Some(n) = &name {
-        sqlx::query("UPDATE code SET name = ? WHERE id = ?")
+        sqlx::query("UPDATE code SET name = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?")
             .bind(n)
             .bind(&id)
             .execute(&mut *tx)
@@ -314,7 +314,7 @@ pub async fn codes_update(
         if !colors::is_valid_hex_color(c) {
             return Err(format!("Invalid color: '{}' (must be #RGB or #RRGGBB)", c));
         }
-        sqlx::query("UPDATE code SET color = ? WHERE id = ?")
+        sqlx::query("UPDATE code SET color = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?")
             .bind(c)
             .bind(&id)
             .execute(&mut *tx)
@@ -322,7 +322,7 @@ pub async fn codes_update(
             .map_err(|e| e.to_string())?;
     }
     if let Some(d) = &description {
-        sqlx::query("UPDATE code SET description = ? WHERE id = ?")
+        sqlx::query("UPDATE code SET description = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?")
             .bind(d)
             .bind(&id)
             .execute(&mut *tx)
