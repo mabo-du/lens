@@ -178,7 +178,7 @@ function TopNav({ onJournalOpen, onCloseProject, onSettingsOpen, onHelpOpen, onI
           >
             <Settings className="w-4 h-4" />
           </TooltipTrigger>
-          <TooltipContent>Settings</TooltipContent>
+          <TooltipContent>Settings (theme, display name, code color)</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger
