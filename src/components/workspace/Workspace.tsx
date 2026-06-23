@@ -19,6 +19,7 @@ import { exportIpc } from '@/ipc/export';
 import { exporterRegistry } from '@/export/index';
 import { projectsIpc } from '@/ipc/projects';
 import { annotationsIpc } from '@/ipc/annotations';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { SettingsDialog } from '../settings/SettingsDialog';
 import { HelpDialog } from '../settings/HelpDialog';
 
@@ -140,46 +141,54 @@ function TopNav({ onJournalOpen, onCloseProject, onSettingsOpen, onHelpOpen, onI
           </Popover>
         )}
         {activeProject && onImportQdpx && (
-          <button
+          <Tooltip>
+            <TooltipTrigger className="flex items-center space-x-2 hover:bg-slate-700 px-3 py-1.5 rounded transition-colors text-sm" onClick={onImportQdpx}>
+              <Upload className="w-4 h-4" />
+              <span>Import REFI-QDA</span>
+            </TooltipTrigger>
+            <TooltipContent>Import a .qdpx file from other QDA tools</TooltipContent>
+          </Tooltip>
+        )}
+        <Tooltip>
+          <TooltipTrigger
             className="flex items-center space-x-2 hover:bg-slate-700 px-3 py-1.5 rounded transition-colors text-sm"
-            onClick={onImportQdpx}
-            title="Import REFI-QDA project (.qdpx)"
+            onClick={onJournalOpen}
           >
-            <Upload className="w-4 h-4" />
-            <span>Import REFI-QDA</span>
-          </button>
-        )}
-        <button 
-          className="flex items-center space-x-2 hover:bg-slate-700 px-3 py-1.5 rounded transition-colors text-sm"
-          onClick={onJournalOpen}
-        >
-          <Book className="w-4 h-4" />
-          <span>Project Journal</span>
-        </button>
+            <Book className="w-4 h-4" />
+            <span>Project Journal</span>
+          </TooltipTrigger>
+          <TooltipContent>Write and browse project-wide memos</TooltipContent>
+        </Tooltip>
         {activeProject && (
-          <button 
-            className="flex items-center space-x-2 hover:bg-red-800 px-3 py-1.5 rounded transition-colors text-sm"
-            onClick={onCloseProject}
-            title="Close Project"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>Close</span>
-          </button>
+          <Tooltip>
+            <TooltipTrigger
+              className="flex items-center space-x-2 hover:bg-red-800 px-3 py-1.5 rounded transition-colors text-sm"
+              onClick={onCloseProject}
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Close</span>
+            </TooltipTrigger>
+            <TooltipContent>Close the current project</TooltipContent>
+          </Tooltip>
         )}
-        <button
-          className="flex items-center space-x-2 hover:bg-slate-700 px-2 py-1.5 rounded transition-colors text-sm"
-          onClick={onSettingsOpen}
-          title="Settings"
-        >
-          <Settings className="w-4 h-4" />
-        </button>
-        <button
-          className="flex items-center space-x-2 hover:bg-slate-700 px-2 py-1.5 rounded transition-colors text-sm"
-          onClick={onHelpOpen}
-          title="Keyboard Shortcuts"
-        >
-          <HelpCircle className="w-4 h-4" />
-        </button>
+        <Tooltip>
+          <TooltipTrigger
+            className="flex items-center space-x-2 hover:bg-slate-700 px-2 py-1.5 rounded transition-colors text-sm"
+            onClick={onSettingsOpen}
+          >
+            <Settings className="w-4 h-4" />
+          </TooltipTrigger>
+          <TooltipContent>Settings</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger
+            className="flex items-center space-x-2 hover:bg-slate-700 px-2 py-1.5 rounded transition-colors text-sm"
+            onClick={onHelpOpen}
+          >
+            <HelpCircle className="w-4 h-4" />
+          </TooltipTrigger>
+          <TooltipContent>Keyboard shortcuts</TooltipContent>
+        </Tooltip>
       </div>
     </div>
   );

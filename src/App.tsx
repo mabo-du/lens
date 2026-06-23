@@ -12,7 +12,9 @@ import { useUiStore } from './store/uiStore';
 import { qdpxImportIpc } from './ipc/qdpx_import';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { EncryptionDialog } from './components/settings/EncryptionDialog';
+import { ConflictDialog } from './components/settings/ConflictDialog';
 import { Beaker, FolderOpen, Plus, X } from 'lucide-react';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import "./App.css";
 
 function App() {
@@ -101,6 +103,16 @@ function App() {
     }
   };
 
+  // QDPX import conflict dialog state
+  const [conflictOpen, setConflictOpen] = useState(false);
+  const conflictResolve = useRef<((choice: 'merge' | 'replace' | null) => void) | null>(null);
+  const promptConflict = useCallback((): Promise<'merge' | 'replace' | null> => {
+    return new Promise((resolve) => {
+      conflictResolve.current = resolve;
+      setConflictOpen(true);
+    });
+  }, []);
+
   const handleQdpxImport = async () => {
     if (!activeProject) return;
     const files = await openDialog({
@@ -114,10 +126,9 @@ function App() {
     const hasData = store.documents.length > 0 || store.codes.length > 0;
     let mode: 'merge' | 'replace' = 'merge';
     if (hasData) {
-      const choice = confirm(
-        'Project already contains data.\n\nOK = Replace (delete all existing data first)\nCancel = Merge (add imported items alongside existing)',
-      );
-      mode = choice ? 'replace' : 'merge';
+      const choice = await promptConflict();
+      if (!choice) return; // user cancelled
+      mode = choice;
     }
 
     try {
@@ -247,16 +258,34 @@ function App() {
   }
 
   return (
-    <>
+    <TooltipProvider delay={500}>
       <EncryptionDialog
         open={encryptOpen}
         mode={encryptMode}
         onConfirm={handleEncryptConfirm}
         onCancel={handleEncryptCancel}
       />
+      <ConflictDialog
+        open={conflictOpen}
+        onMerge={() => {
+          conflictResolve.current?.('merge');
+          conflictResolve.current = null;
+          setConflictOpen(false);
+        }}
+        onReplace={() => {
+          conflictResolve.current?.('replace');
+          conflictResolve.current = null;
+          setConflictOpen(false);
+        }}
+        onCancel={() => {
+          conflictResolve.current?.(null);
+          conflictResolve.current = null;
+          setConflictOpen(false);
+        }}
+      />
       <Workspace onImportQdpx={handleQdpxImport} />
       <Toaster />
-    </>
+    </TooltipProvider>
   );
 }
 
