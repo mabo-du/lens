@@ -427,7 +427,16 @@ async fn memos_save_populates_created_by() {
     .await
     .expect("Failed to create project");
 
-    let user_id = seed_local_user(&state).await;
+    // §1.5 auto-creates local_user on project creation —
+    // no need to seed manually.
+    let pool_guard = state.db.read().await;
+    let pool = pool_guard.as_ref().expect("No DB");
+    let (user_id, _display_name): (String, String) =
+        sqlx::query_as("SELECT id, display_name FROM local_user LIMIT 1")
+            .fetch_one(pool)
+            .await
+            .expect("local_user should be auto-created");
+    drop(pool_guard);
 
     let memo = memos_save_internal(
         &state,
@@ -619,14 +628,24 @@ async fn export_uses_real_local_user() {
     .await
     .expect("Failed to create project");
 
-    let user_id = seed_local_user(&state).await;
+    // §1.5 auto-creates local_user on project creation.
+    // Read the auto-created ID so we can assert the export uses it.
+    let pool_guard = state.db.read().await;
+    let pool = pool_guard.as_ref().expect("No DB");
+    let (user_id, display_name): (String, String) =
+        sqlx::query_as("SELECT id, display_name FROM local_user LIMIT 1")
+            .fetch_one(pool)
+            .await
+            .expect("local_user should be auto-created");
+    assert_eq!(display_name, "Local User", "Default display name");
+    drop(pool_guard);
 
     let payload = export_prepare_internal(&state, project.id.clone())
         .await
         .expect("Export should succeed");
 
     assert_eq!(payload.local_user.id, user_id, "Should use real local_user ID");
-    assert_eq!(payload.local_user.display_name, "Test User", "Should use real display name");
+    assert_eq!(payload.local_user.display_name, "Local User", "Should use auto-created display name");
 }
 
 #[test]
@@ -762,4 +781,69 @@ async fn project_name_accepts_valid_name() {
     .await
     .expect("Valid project name should succeed");
     assert_eq!(project.name, "My Project 2025");
+}
+
+// ---------------------------------------------------------------------------
+// Phase 1.5 — Empty GUID / local_user auto-creation tests
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn local_user_is_auto_created_on_project_create() {
+    let (state, _temp_dir) = setup_test_state().await;
+
+    // Create a project — §1.5 guarantees a local_user row is inserted.
+    let _project = projects_create_internal(
+        &state,
+        "User Test".to_string(),
+        None,
+        _temp_dir.path().to_string_lossy().to_string(),
+    )
+    .await
+    .expect("Project creation should succeed");
+
+    let pool_guard = state.db.read().await;
+    let pool = pool_guard.as_ref().expect("No DB");
+
+    let (id, display_name): (String, String) = sqlx::query_as(
+        "SELECT id, display_name FROM local_user LIMIT 1"
+    )
+    .fetch_one(pool)
+    .await
+    .expect("local_user should exist after project creation");
+
+    // Verify a valid UUID was generated.
+    assert!(
+        uuid::Uuid::parse_str(&id).is_ok(),
+        "local_user id should be a valid UUID, got: {}",
+        id
+    );
+    assert_eq!(display_name, "Local User", "Default display name should be 'Local User'");
+}
+
+#[tokio::test]
+async fn local_user_auto_created_before_export() {
+    let (state, _temp_dir) = setup_test_state().await;
+
+    let project = projects_create_internal(
+        &state,
+        "Export GUID Test".to_string(),
+        None,
+        _temp_dir.path().to_string_lossy().to_string(),
+    )
+    .await
+    .expect("Project creation should succeed");
+
+    // Export without explicitly seeding local_user — the project creation
+    // should have auto-created it.
+    let payload = export_prepare_internal(&state, project.id.clone())
+        .await
+        .expect("Export should succeed without manual local_user seeding");
+
+    // The GUID must be a valid non-empty UUID.
+    assert!(!payload.local_user.id.is_empty(), "local_user.id must not be empty");
+    assert!(
+        uuid::Uuid::parse_str(&payload.local_user.id).is_ok(),
+        "Exported local_user.id should be a valid UUID, got: {}",
+        payload.local_user.id
+    );
 }

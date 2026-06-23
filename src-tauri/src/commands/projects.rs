@@ -22,6 +22,29 @@ pub struct Project {
     pub updated_at: String,
 }
 
+/// Auto-create a `local_user` row if the table is empty. This guarantees
+/// the export path never encounters the "no local_user" fallback, which would
+/// produce an empty GUID (`""`) — invalid per REFI-QDA `Projects.xsd`.
+///
+/// Uses an atomic `INSERT ... WHERE NOT EXISTS` to avoid a TOCTOU race
+/// between two concurrent callers (e.g., rapid `projects_open` calls
+/// on the same DB).
+async fn ensure_local_user_exists(pool: &sqlx::SqlitePool) -> Result<(), String> {
+    let user_id = Uuid::new_v4().to_string();
+    sqlx::query(
+        "INSERT INTO local_user (id, display_name) \
+         SELECT ?, ? \
+         WHERE NOT EXISTS (SELECT 1 FROM local_user)"
+    )
+    .bind(&user_id)
+    .bind("Local User")
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Failed to create local_user: {}", e))?;
+
+    Ok(())
+}
+
 fn validate_project_name(name: &str) -> Result<(), String> {
     // Reject empty and overlong names
     if name.is_empty() {
@@ -93,6 +116,10 @@ pub async fn projects_create_internal(
     .await
     .map_err(|e| format!("Failed to insert project: {}", e))?;
 
+    // Guarantee a local_user row exists — the export path requires a
+    // non-empty GUID per REFI-QDA Projects.xsd (ACTION_PLAN §1.5).
+    ensure_local_user_exists(&pool).await?;
+
     let project = sqlx::query_as::<_, Project>(
         "SELECT id, name, description, created_at as createdAt, updated_at as updatedAt FROM project WHERE id = ?"
     )
@@ -131,7 +158,11 @@ pub async fn projects_open(
     }
     
     let pool = crate::db::init_db(&db_path).await?;
-    
+
+    // Auto-create local_user if missing (handles projects created before
+    // the §1.5 fix landed).
+    ensure_local_user_exists(&pool).await?;
+
     // We assume there's only one project row in the database per .qdaproj file
     let project = sqlx::query_as::<_, Project>(
         "SELECT id, name, description, created_at as createdAt, updated_at as updatedAt FROM project LIMIT 1"
