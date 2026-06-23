@@ -12,7 +12,9 @@ const MIGRATIONS: &[(&str, &str)] = &[
 ];
 
 pub async fn run_migrations(pool: &SqlitePool) -> Result<(), String> {
-    for (name, sql) in MIGRATIONS {
+    for (i, (name, sql)) in MIGRATIONS.iter().enumerate() {
+        let version = i as i32 + 1;
+
         // Run PRAGMAS
         sqlx::query("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON; PRAGMA temp_store = MEMORY; PRAGMA cache_size = -32000;")
             .execute(pool)
@@ -31,8 +33,6 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), String> {
         .map_err(|e| format!("Failed to create schema_version table: {}", e))?;
 
         // Check if migration is already applied
-        // We'll use the index in the array + 1 as the version number
-        let version = MIGRATIONS.iter().position(|&(n, _)| n == *name).unwrap() as i32 + 1;
 
         let applied: Option<i32> =
             sqlx::query_scalar("SELECT version FROM schema_version WHERE version = ?")
