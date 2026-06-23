@@ -9,6 +9,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "02_unique_text_hash",
         include_str!("migrations/02_unique_text_hash.sql"),
     ),
+    (
+        "03_add_code_updated_at",
+        include_str!("migrations/03_add_code_updated_at.sql"),
+    ),
 ];
 
 pub async fn run_migrations(pool: &SqlitePool) -> Result<(), String> {
