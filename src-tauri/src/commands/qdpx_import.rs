@@ -8,10 +8,15 @@ use uuid::Uuid;
 ///
 /// `mode` is either "merge" (add alongside existing data) or "replace"
 /// (delete all existing data first).
+///
+/// For "replace" mode, a backup of the database is saved to
+/// `project_folder` / `.qdpx-backup` before the transaction begins,
+/// allowing undo via `qdpx_import_undo_internal`.
 pub async fn qdpx_import_internal(
     pool: &SqlitePool,
     file_path: &str,
     mode: &str,
+    project_folder: Option<&std::path::Path>,
 ) -> Result<String, String> {
     // 1. Open ZIP and read all relevant files upfront (avoids borrow conflicts)
     let file = std::fs::File::open(file_path)
@@ -49,6 +54,28 @@ pub async fn qdpx_import_internal(
     let root = doc.root_element();
 
     // ---- Begin transaction ----
+    // For replace mode, backup the database first so undo is possible
+    if mode == "replace" {
+        if let Some(folder) = project_folder {
+            // Find the actual .qdaproj file in the project folder
+            let backup_path = folder.join(".qdpx-backup");
+            let db_path: Option<std::path::PathBuf> = std::fs::read_dir(folder)
+                .ok()
+                .and_then(|entries| {
+                    entries.filter_map(|e| e.ok()).find(|e| {
+                        e.path()
+                            .extension()
+                            .map_or(false, |ext| ext == "qdaproj")
+                    })
+                })
+                .map(|e| e.path());
+            if let Some(db) = db_path {
+                std::fs::copy(&db, &backup_path)
+                    .map_err(|e| format!("Failed to create backup: {}", e))?;
+            }
+        }
+    }
+
     let mut tx = pool.begin().await.map_err(|e| format!("DB error: {}", e))?;
 
     // Get the project ID
@@ -340,5 +367,48 @@ pub async fn qdpx_import(
 ) -> Result<String, String> {
     let pool = state.db.read().await;
     let pool = pool.as_ref().ok_or("No project open")?;
-    qdpx_import_internal(pool, &file_path, &mode).await
+    let folder = state.project_folder.read().await;
+    qdpx_import_internal(pool, &file_path, &mode, folder.as_deref()).await
+}
+
+/// Restore the database from the backup created before a replace-mode import.
+#[tauri::command]
+pub async fn qdpx_import_undo(
+    _app: tauri::AppHandle,
+    state: tauri::State<'_, super::projects::AppState>,
+) -> Result<String, String> {
+    let folder = state.project_folder.read().await;
+    let folder = folder.as_ref().ok_or("No project open")?;
+    let backup_path = folder.join(".qdpx-backup");
+
+    if !backup_path.exists() {
+        return Err("No import backup found to undo".to_string());
+    }
+
+    // Find the actual .qdaproj file in the project folder
+    let db_path: std::path::PathBuf = std::fs::read_dir(folder)
+        .map_err(|e| format!("Failed to read project folder: {}", e))?
+        .filter_map(|e| e.ok())
+        .find(|e| e.path().extension().map_or(false, |ext| ext == "qdaproj"))
+        .map(|e| e.path())
+        .ok_or("No .qdaproj database file found in project folder")?;
+
+    // Close the current pool before replacing the file
+    {
+        let mut db = state.db.write().await;
+        db.take(); // drop the pool
+    }
+
+    std::fs::copy(&backup_path, &db_path)
+        .map_err(|e| format!("Failed to restore backup: {}", e))?;
+
+    // Remove the backup
+    std::fs::remove_file(&backup_path).ok();
+
+    // Re-open the database
+    let encryption_key = state.encryption_key.read().await.clone();
+    let pool = crate::db::init_db(&db_path, encryption_key.as_deref()).await?;
+    *state.db.write().await = Some(pool);
+
+    Ok("Import undone. Previous data restored.".to_string())
 }

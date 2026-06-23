@@ -187,7 +187,7 @@ function TopNav({ onJournalOpen, onCloseProject, onSettingsOpen, onHelpOpen, onI
           >
             <HelpCircle className="w-4 h-4" />
           </TooltipTrigger>
-          <TooltipContent>Keyboard shortcuts</TooltipContent>
+          <TooltipContent>Keyboard shortcuts (Ctrl+Z undo, Ctrl+F search, Ctrl+K code picker)</TooltipContent>
         </Tooltip>
       </div>
     </div>
