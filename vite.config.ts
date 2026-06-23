@@ -5,8 +5,7 @@ import path from "path";
 
 /// <reference types="vitest/config" />
 
-// @ts-expect-error process is a nodejs global
-const host = process.env.TAURI_DEV_HOST;
+const host: string | undefined = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
