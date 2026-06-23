@@ -10,10 +10,33 @@ import { projectsIpc } from "./ipc/projects";
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { useUiStore } from './store/uiStore';
 import { qdpxImportIpc } from './ipc/qdpx_import';
-import { FolderOpen, Plus, Upload, X } from 'lucide-react';
+import { useEffect } from 'react';
+import { Beaker, FolderOpen, Plus, Upload, X } from 'lucide-react';
 import "./App.css";
 
 function App() {
+  const theme = useUiStore(s => s.theme);
+
+  // Apply theme on startup and when changed
+  useEffect(() => {
+    const isDark =
+      theme === 'dark' ||
+      (theme === 'system' &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.classList.toggle('dark', isDark);
+  }, [theme]);
+
+  // Listen for system theme changes when in 'system' mode
+  useEffect(() => {
+    if (theme !== 'system') return;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (e: MediaQueryListEvent) => {
+      document.documentElement.classList.toggle('dark', e.matches);
+    };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, [theme]);
+
   const activeProject = useProjectStore(s => s.activeProject);
   const setActiveProject = useProjectStore(s => s.setActiveProject);
   const setDocuments = useProjectStore(s => s.setDocuments);
@@ -82,6 +105,29 @@ function App() {
     }
   };
 
+  const handleCreateSampleProject = async () => {
+    const selected = await openDialog({ directory: true });
+    if (selected && typeof selected === 'string') {
+      try {
+        const proj = await projectsIpc.createSample(selected);
+        setActiveProject(proj);
+        setDocuments([]);
+        setCodes([]);
+        setMemos([]);
+        // Reload to get the seeded data
+        const docs = await documentsIpc.list(proj.id);
+        setDocuments(docs);
+        const codesList = await codesIpc.getTree(proj.id);
+        setCodes(codesList);
+        const memosList = await memosIpc.listByProject(proj.id);
+        setMemos(memosList);
+        addRecentProject({ path: `${selected}/Sample Project`, name: proj.name, openedAt: new Date().toISOString() });
+      } catch (e) {
+        toast.error(`Failed to create sample project: ${e}`);
+      }
+    }
+  };
+
   const handleCreateProject = async () => {
     const selected = await openDialog({ directory: true });
     if (selected && typeof selected === 'string') {
@@ -116,6 +162,10 @@ function App() {
             <button onClick={handleCreateProject} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center justify-center space-x-2">
               <Plus className="w-4 h-4" />
               <span>New Project</span>
+            </button>
+            <button onClick={handleCreateSampleProject} className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 flex items-center justify-center space-x-2">
+              <Beaker className="w-4 h-4" />
+              <span>Sample Project</span>
             </button>
             <button onClick={() => handleOpenProject()} className="px-4 py-2 bg-slate-200 text-slate-800 rounded hover:bg-slate-300 flex items-center justify-center space-x-2">
               <FolderOpen className="w-4 h-4" />

@@ -30,6 +30,8 @@ interface UiState {
   recentProjects: RecentProject[];
   annotationUndoStack: UndoEntry[];
   annotationRedoStack: UndoEntry[];
+  theme: 'light' | 'dark' | 'system';
+  defaultCodeColor: string;
 
   setLeftPanelWidth: (w: number) => void;
   setRightPanelWidth: (w: number) => void;
@@ -44,6 +46,8 @@ interface UiState {
   undoAnnotation: () => UndoEntry | null;
   redoAnnotation: () => UndoEntry | null;
   fixStackTopAnnotation: (stack: 'undo' | 'redo', annotation: UndoEntry['annotation']) => void;
+  setTheme: (theme: 'light' | 'dark' | 'system') => void;
+  setDefaultCodeColor: (color: string) => void;
 }
 
 export const useUiStore = create<UiState>()(
@@ -58,6 +62,8 @@ export const useUiStore = create<UiState>()(
       recentProjects: [],
       annotationUndoStack: [],
       annotationRedoStack: [],
+      theme: 'system' as const,
+      defaultCodeColor: '#6366f1',
 
       setLeftPanelWidth: (w) => set({ leftPanelWidth: w }),
       setRightPanelWidth: (w) => set({ rightPanelWidth: w }),
@@ -141,6 +147,8 @@ export const useUiStore = create<UiState>()(
           updated[updated.length - 1] = { ...updated[updated.length - 1], annotation };
           return { [target]: updated };
         }),
+      setTheme: (theme) => set({ theme }),
+      setDefaultCodeColor: (color) => set({ defaultCodeColor: color }),
     }),
     {
       name: 'lens-ui-storage',
@@ -149,6 +157,8 @@ export const useUiStore = create<UiState>()(
         rightPanelWidth: state.rightPanelWidth,
         expandedCodeNodeIds: state.expandedCodeNodeIds,
         recentProjects: state.recentProjects,
+        theme: state.theme,
+        defaultCodeColor: state.defaultCodeColor,
       }),
     },
   ),

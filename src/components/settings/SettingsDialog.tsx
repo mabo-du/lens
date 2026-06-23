@@ -1,0 +1,156 @@
+import { useState, useEffect } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { useUiStore } from '@/store/uiStore';
+import { useProjectStore } from '@/store/projectStore';
+import { projectsIpc } from '@/ipc/projects';
+import { toast } from 'sonner';
+
+const PALETTE = [
+  '#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6',
+  '#8b5cf6', '#ef4444', '#14b8a6', '#f97316', '#06b6d4',
+  '#84cc16', '#d946ef', '#64748b', '#e11d48', '#0ea5e9',
+  '#a855f7',
+];
+
+export function SettingsDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const theme = useUiStore((s) => s.theme);
+  const setTheme = useUiStore((s) => s.setTheme);
+  const defaultCodeColor = useUiStore((s) => s.defaultCodeColor);
+  const setDefaultCodeColor = useUiStore((s) => s.setDefaultCodeColor);
+  const activeProject = useProjectStore((s) => s.activeProject);
+
+  const [displayName, setDisplayName] = useState('');
+  const [savingName, setSavingName] = useState(false);
+
+  // Load current display name
+  useEffect(() => {
+    if (open && activeProject) {
+      projectsIpc.localUserGetName()
+        .then(setDisplayName)
+        .catch(() => setDisplayName('Local User'));
+    }
+  }, [open, activeProject]);
+
+  const handleSaveName = async () => {
+    const trimmed = displayName.trim();
+    if (!trimmed) {
+      toast.error('Display name must not be empty');
+      return;
+    }
+    setSavingName(true);
+    try {
+      await projectsIpc.localUserUpdateName(trimmed);
+      toast.success('Display name updated');
+    } catch (e) {
+      toast.error(`Failed to update name: ${e}`);
+    } finally {
+      setSavingName(false);
+    }
+  };
+
+  const applyTheme = (newTheme: 'light' | 'dark' | 'system') => {
+    setTheme(newTheme);
+    const isDark =
+      newTheme === 'dark' ||
+      (newTheme === 'system' &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.classList.toggle('dark', isDark);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[440px]">
+        <DialogHeader>
+          <DialogTitle>Settings</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-6 mt-2">
+          {/* Display Name */}
+          <div>
+            <label className="text-sm font-medium text-slate-700 block mb-1.5">
+              Display Name
+            </label>
+            <div className="flex space-x-2">
+              <input
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
+                className="flex-1 px-3 py-1.5 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                maxLength={64}
+                placeholder="Your name"
+              />
+              <button
+                onClick={handleSaveName}
+                disabled={savingName}
+                className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50"
+              >
+                {savingName ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+            <p className="text-xs text-slate-400 mt-1">
+              Displayed as the coder in exports.
+            </p>
+          </div>
+
+          {/* Theme */}
+          <div>
+            <label className="text-sm font-medium text-slate-700 block mb-1.5">
+              Theme
+            </label>
+            <div className="flex space-x-2">
+              {(['light', 'dark', 'system'] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => applyTheme(t)}
+                  className={`flex-1 px-3 py-1.5 text-sm rounded border transition-colors ${
+                    theme === t
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {t.charAt(0).toUpperCase() + t.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Default Code Color */}
+          <div>
+            <label className="text-sm font-medium text-slate-700 block mb-1.5">
+              Default Code Color
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {PALETTE.map((color) => (
+                <button
+                  key={color}
+                  onClick={() => setDefaultCodeColor(color)}
+                  className={`w-7 h-7 rounded-full border-2 transition-all ${
+                    defaultCodeColor === color
+                      ? 'border-slate-800 scale-110 shadow-md'
+                      : 'border-transparent hover:scale-105'
+                  }`}
+                  style={{ backgroundColor: color }}
+                  title={color}
+                />
+              ))}
+            </div>
+            <p className="text-xs text-slate-400 mt-1">
+              Used when auto-assigning colors to new codes.
+            </p>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

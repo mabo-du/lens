@@ -224,6 +224,41 @@ pub async fn projects_rename(
 }
 
 #[command]
+pub async fn local_user_get_name(state: State<'_, AppState>) -> Result<String, String> {
+    let pool = state.db.read().await;
+    let pool = pool.as_ref().ok_or("No project open")?;
+    let (name,): (String,) =
+        sqlx::query_as("SELECT display_name FROM local_user LIMIT 1")
+            .fetch_one(pool)
+            .await
+            .map_err(|e| format!("Failed to read local_user: {}", e))?;
+    Ok(name)
+}
+
+#[command]
+pub async fn local_user_update_name(
+    _app: AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<(), String> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err("Display name must not be empty".to_string());
+    }
+    if trimmed.len() > 64 {
+        return Err("Display name must be 64 characters or fewer".to_string());
+    }
+    let pool = state.db.read().await;
+    let pool = pool.as_ref().ok_or("No project open")?;
+    sqlx::query("UPDATE local_user SET display_name = ?")
+        .bind(trimmed)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Failed to update display name: {}", e))?;
+    Ok(())
+}
+
+#[command]
 pub async fn projects_close(state: State<'_, AppState>) -> Result<(), String> {
     *state.db.write().await = None;
     *state.project_folder.write().await = None;
