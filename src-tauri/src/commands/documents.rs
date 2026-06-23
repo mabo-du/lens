@@ -31,8 +31,7 @@ pub async fn document_delete_internal(state: &AppState, id: String) -> Result<()
         .map_err(|e| e.to_string())?;
 
     // Direct delete the asset file using the known naming convention
-    // ({id}.{ext}) — O(1) instead of scanning the entire assets/ directory
-    // (ACTION_PLAN §2.4).
+    // ({id}.{ext}) — O(1) instead of scanning the entire assets/ directory.
     if let Ok(folder_guard) = state.project_folder.try_read() {
         if let Some(ref folder) = *folder_guard {
             let assets_dir = folder.join("assets");

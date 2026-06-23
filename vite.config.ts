@@ -45,7 +45,6 @@ export default defineConfig(async () => ({
           'prosemirror': ['prosemirror-model', 'prosemirror-state', 'prosemirror-transform', 'prosemirror-view'],
           'ui-vendor': ['@base-ui/react', 'lucide-react', 'sonner', 'cmdk', 'react-arborist', 'react-resizable-panels'],
           'handlebars': ['handlebars'],
-          'docx-parser': ['mammoth'],
         },
       },
     },

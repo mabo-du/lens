@@ -70,7 +70,7 @@ export function SearchDialog() {
         let searchQuery = query.trim();
         let codeIdFilter: string | undefined;
 
-        // Parse code: prefix (ACTION_PLAN P3.8)
+        // Parse code: prefix
         if (searchQuery.startsWith('code:')) {
           const rest = searchQuery.slice(5).trim();
           const spaceIdx = rest.indexOf(' ');
@@ -99,7 +99,7 @@ export function SearchDialog() {
     if (r.sourceType === 'document') {
       setActiveDocument(r.sourceId);
     } else if (r.sourceType === 'memo') {
-      // Navigate to the linked code or annotation (ACTION_PLAN P3.9)
+      // Navigate to the linked code or annotation
       const codes = useProjectStore.getState().codes;
       const flatCodes = flattenCodeTree(codes);
       // r.sourceName format: "Memo for CodeName" or "Memo for Annotation" or "Project Journal"

@@ -1,0 +1,66 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: TypeScript + Lint
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.0
+
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.0.0
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # npm run build runs `tsc && vite build`, so type-checking and
+      # bundling happen in one step.
+      - name: Frontend build
+        run: npm run build
+
+      - name: aislop scan
+        run: |
+          if command -v aislop >/dev/null 2>&1; then
+            aislop scan
+          else
+            echo "aislop not installed; skipping"
+          fi
+
+  rust:
+    name: Rust tests
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.0
+
+      - uses: dtolnay/rust-toolchain@67ef31d8a014cc4266be7478fa76df39d501f3c6 # master (stable)
+        with:
+          cache: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev
+
+      - name: Cargo build
+        working-directory: src-tauri
+        run: cargo build
+
+      - name: Cargo test
+        working-directory: src-tauri
+        run: cargo test --verbose

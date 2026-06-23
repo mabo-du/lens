@@ -98,7 +98,7 @@ pub async fn export_prepare_internal(
     .map_err(|e| format!("Failed to fetch memos: {}", e))?;
 
     // Look up the actual local_user from the DB.
-    // Per ACTION_PLAN §1.5, a row is auto-created on project creation
+    // A row is auto-created on project creation
     // and on project open, so the fallback here should be unreachable.
     // We generate a UUID v4 as a defense-in-depth measure — an empty
     // GUID would violate REFI-QDA Projects.xsd.

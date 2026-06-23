@@ -231,7 +231,7 @@ export function Workspace({ onImportQdpx }: { onImportQdpx?: () => void }) {
   const [helpOpen, setHelpOpen] = useState(false);
   const setActiveProject = useProjectStore(s => s.setActiveProject);
 
-  // Undo/Redo keyboard shortcuts (ACTION_PLAN P4.6)
+  // Undo/Redo keyboard shortcuts
   const undoAnnotation = useUiStore(s => s.undoAnnotation);
   const redoAnnotation = useUiStore(s => s.redoAnnotation);
   const fixStackTopAnnotation = useUiStore(s => s.fixStackTopAnnotation);

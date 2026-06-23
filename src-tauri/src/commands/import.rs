@@ -57,8 +57,7 @@ pub async fn documents_import_internal(
     // DOCX extraction happens in the renderer via Mammoth.js (see
     // DocumentList.tsx). The renderer passes the extracted text as
     // `raw_text`, so DOCX imports must supply this parameter. Direct
-    // Rust-side DOCX extraction is deferred to a future phase (Option A
-    // in ACTION_PLAN §1.4).
+    // Rust-side DOCX extraction is deferred to a future phase (Option A).
     let text_content = match raw_text {
         Some(text) => text,
         None => match file_format.as_str() {
@@ -101,7 +100,7 @@ pub async fn documents_import_internal(
 
     // Wrap duplicate check + INSERT in a transaction. Together with the
     // UNIQUE(project_id, text_hash) index (migration 02), this prevents
-    // concurrent imports from inserting duplicate rows (ACTION_PLAN §2.3).
+    // concurrent imports from inserting duplicate rows.
     let mut tx = pool
         .begin()
         .await

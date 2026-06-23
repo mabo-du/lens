@@ -7,7 +7,6 @@ import { useState } from 'react';
 import { documentsIpc, DocumentRecord } from '@/ipc/documents';
 import { open } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
-import * as mammoth from 'mammoth';
 
 export function DocumentList() {
   const documents = useProjectStore(s => s.documents);
@@ -70,6 +69,7 @@ export function DocumentList() {
       try {
         if (ext === 'docx') {
           const fileData = await readFile(filePath);
+          const mammoth = await import('mammoth');
           const result = await mammoth.extractRawText({ arrayBuffer: fileData.buffer });
           const doc = await documentsIpc.import({ projectId, filePath, fileFormat: 'docx', rawText: result.value });
           newDocs.push(doc);

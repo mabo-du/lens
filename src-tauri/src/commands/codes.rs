@@ -38,7 +38,7 @@ pub async fn codes_create_internal(
     name: String,
     color: Option<String>,
 ) -> Result<Code, String> {
-    // Input validation (ACTION_PLAN P2.5)
+    // Input validation
     let name = name.trim().to_string();
     if name.is_empty() {
         return Err("Code name must not be empty".to_string());
@@ -306,7 +306,7 @@ pub async fn codes_update(
     color: Option<String>,
     description: Option<String>,
 ) -> Result<Code, String> {
-    // Input validation (ACTION_PLAN P2.5)
+    // Input validation
     let name = name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty());
     if let Some(ref n) = name {
         if n.len() > 128 {
