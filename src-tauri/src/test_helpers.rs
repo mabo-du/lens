@@ -22,7 +22,7 @@ pub async fn setup_test_state() -> (AppState, tempfile::TempDir) {
     (state, temp_dir)
 }
 
-/// Return the ID of the auto-created `local_user` row (ACTION_PLAN §1.5).
+/// Return the ID of the auto-created `local_user` row.
 /// `ensure_local_user_exists` is called during project creation and open,
 /// so every test DB already has a row — no need to insert a duplicate.
 pub async fn seed_local_user(state: &AppState) -> String {

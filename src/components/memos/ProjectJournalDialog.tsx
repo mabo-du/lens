@@ -22,7 +22,7 @@ export function ProjectJournalDialog({ open, onOpenChange }: { open: boolean, on
     }
   }, [open, activeProject]);
 
-  // Clean up timeout on unmount (ACTION_PLAN P2.2)
+  // Clean up pending write timeout on unmount
   useEffect(() => {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -37,7 +37,7 @@ export function ProjectJournalDialog({ open, onOpenChange }: { open: boolean, on
   }, [open]);
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value; // capture before timeout (ACTION_PLAN B4)
+    const value = e.target.value; // capture before timeout closure
     setContent(value);
     
     if (timeoutRef.current) clearTimeout(timeoutRef.current);

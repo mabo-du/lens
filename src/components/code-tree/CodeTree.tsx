@@ -52,7 +52,7 @@ function CodeMemoPanel({ code, onClose }: { code: CodeNodeMeta, onClose: () => v
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value; // capture before timeout (ACTION_PLAN B4)
+    const value = e.target.value; // capture before timeout closure
     setContent(value);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {

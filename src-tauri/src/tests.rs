@@ -913,7 +913,7 @@ async fn local_user_auto_created_before_export() {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 2.1 — Closure-table invariant test (ACTION_PLAN §Part 5)
+// Phase 2.1 — Closure-table invariant test
 // ---------------------------------------------------------------------------
 
 #[tokio::test]

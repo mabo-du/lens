@@ -130,7 +130,7 @@ pub async fn projects_create_internal(
         .map_err(|e| format!("Failed to insert project: {}", e))?;
 
     // Guarantee a local_user row exists — the export path requires a
-    // non-empty GUID per REFI-QDA Projects.xsd (ACTION_PLAN §1.5).
+    // non-empty GUID per REFI-QDA Projects.xsd.
     ensure_local_user_exists(&pool).await?;
 
     let project = sqlx::query_as::<_, Project>(

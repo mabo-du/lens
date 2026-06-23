@@ -33,7 +33,7 @@ export function AnnotationMemoDialog({ annotationId, onClose }: { annotationId: 
     codeName = flatCodes.find(c => c.id === annotation.codeId)?.name || 'Unknown Code';
   }
 
-  // Clean up timeout on unmount (ACTION_PLAN P2.2)
+  // Clean up pending write timeout on unmount
   useEffect(() => {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -48,7 +48,7 @@ export function AnnotationMemoDialog({ annotationId, onClose }: { annotationId: 
     }
   }, [annotationId, activeProject]);
 
-  // Clean up timeout when dialog closes (ACTION_PLAN P2.2)
+  // Cancel pending save when dialog closes
   useEffect(() => {
     if (!annotationId) {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -56,7 +56,7 @@ export function AnnotationMemoDialog({ annotationId, onClose }: { annotationId: 
   }, [annotationId]);
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value; // capture before timeout (ACTION_PLAN B3)
+    const value = e.target.value; // capture before timeout closure
     setContent(value);
     
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -93,7 +93,7 @@ export function AnnotationMemoDialog({ annotationId, onClose }: { annotationId: 
                 if (!confirm('Delete this annotation? This cannot be undone.')) return;
                 setIsDeleting(true);
                 try {
-                  // Push undo entry before deleting (ACTION_PLAN P4.6)
+                  // Push undo entry before deleting
                   if (annotation) {
                     pushUndo({ action: 'create', annotation });
                   }

@@ -197,7 +197,7 @@ export function DocumentEditor() {
         <ContextMenuContent>
           <ContextMenuItem 
             onClick={() => {
-              // Only dispatch if there's an active text selection (ACTION_PLAN P2.11)
+              // Only dispatch if there's an active text selection
               const selection = useUiStore.getState().textSelection;
               if (!selection) {
                 toast.error('Select text in the document first, then assign a code.');
