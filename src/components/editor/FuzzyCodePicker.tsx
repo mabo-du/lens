@@ -13,6 +13,7 @@ export function FuzzyCodePicker() {
   const clearTextSelection = useUiStore(s => s.clearTextSelection);
   const codes = useProjectStore(s => s.codes);
   const addAnnotation = useProjectStore(s => s.addAnnotation);
+  const pushUndo = useUiStore(s => s.pushUndo);
 
   const [open, setOpen] = useState(false);
 
@@ -41,6 +42,7 @@ export function FuzzyCodePicker() {
         endChar: textSelection.endChar,
       });
       addAnnotation(ann);
+      pushUndo({ action: 'delete', annotation: ann });
     } catch (e) {
       console.error("Failed to create annotation", e);
       toast.error("Failed to save annotation.");

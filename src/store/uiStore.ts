@@ -7,6 +7,19 @@ export interface RecentProject {
   openedAt: string;
 }
 
+export interface UndoEntry {
+  action: 'delete' | 'create';
+  annotation: {
+    id: string;
+    documentId: string;
+    codeId: string;
+    startChar: number;
+    endChar: number;
+    createdBy: string;
+    createdAt: string;
+  };
+}
+
 interface UiState {
   leftPanelWidth: number;
   rightPanelWidth: number;
@@ -15,7 +28,9 @@ interface UiState {
   expandedCodeNodeIds: string[];
   textSelection: { startChar: number; endChar: number } | null;
   recentProjects: RecentProject[];
-  
+  annotationUndoStack: UndoEntry[];
+  annotationRedoStack: UndoEntry[];
+
   setLeftPanelWidth: (w: number) => void;
   setRightPanelWidth: (w: number) => void;
   setActiveDocument: (id: string | null) => void;
@@ -25,11 +40,15 @@ interface UiState {
   clearTextSelection: () => void;
   addRecentProject: (project: RecentProject) => void;
   removeRecentProject: (path: string) => void;
+  pushUndo: (entry: UndoEntry) => void;
+  undoAnnotation: () => UndoEntry | null;
+  redoAnnotation: () => UndoEntry | null;
+  fixStackTopAnnotation: (stack: 'undo' | 'redo', annotation: UndoEntry['annotation']) => void;
 }
 
 export const useUiStore = create<UiState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       leftPanelWidth: 20,
       rightPanelWidth: 25,
       activeDocumentId: null,
@@ -37,35 +56,100 @@ export const useUiStore = create<UiState>()(
       expandedCodeNodeIds: [],
       textSelection: null,
       recentProjects: [],
+      annotationUndoStack: [],
+      annotationRedoStack: [],
 
       setLeftPanelWidth: (w) => set({ leftPanelWidth: w }),
       setRightPanelWidth: (w) => set({ rightPanelWidth: w }),
       setActiveDocument: (id) => set({ activeDocumentId: id }),
       setActiveCodeView: (id) => set({ activeCodeViewId: id }),
-      toggleCodeNodeExpanded: (id) => set((state) => ({
-        expandedCodeNodeIds: state.expandedCodeNodeIds.includes(id)
-          ? state.expandedCodeNodeIds.filter((x) => x !== id)
-          : [...state.expandedCodeNodeIds, id],
-      })),
+      toggleCodeNodeExpanded: (id) =>
+        set((state) => ({
+          expandedCodeNodeIds: state.expandedCodeNodeIds.includes(id)
+            ? state.expandedCodeNodeIds.filter((x) => x !== id)
+            : [...state.expandedCodeNodeIds, id],
+        })),
       setTextSelection: (sel) => set({ textSelection: sel }),
       clearTextSelection: () => set({ textSelection: null }),
-      addRecentProject: (project) => set((state) => {
-        const filtered = state.recentProjects.filter(p => p.path !== project.path);
-        return { recentProjects: [project, ...filtered].slice(0, 10) };
-      }),
-      removeRecentProject: (path) => set((state) => ({
-        recentProjects: state.recentProjects.filter(p => p.path !== path)
-      })),
+      addRecentProject: (project) =>
+        set((state) => {
+          const filtered = state.recentProjects.filter(
+            (p) => p.path !== project.path,
+          );
+          return {
+            recentProjects: [project, ...filtered].slice(0, 10),
+          };
+        }),
+      removeRecentProject: (path) =>
+        set((state) => ({
+          recentProjects: state.recentProjects.filter((p) => p.path !== path),
+        })),
+      pushUndo: (entry) =>
+        set((state) => ({
+          annotationUndoStack: [
+            ...state.annotationUndoStack.slice(-49),
+            entry,
+          ],
+          annotationRedoStack: [],
+        })),
+      undoAnnotation: () => {
+        const state = get();
+        if (state.annotationUndoStack.length === 0) return null;
+        const entry =
+          state.annotationUndoStack[state.annotationUndoStack.length - 1];
+        set({
+          annotationUndoStack: state.annotationUndoStack.slice(0, -1),
+          annotationRedoStack: [
+            ...state.annotationRedoStack,
+            {
+              ...entry,
+              action:
+                entry.action === 'create'
+                  ? ('delete' as const)
+                  : ('create' as const),
+            },
+          ],
+        });
+        return entry;
+      },
+      redoAnnotation: () => {
+        const state = get();
+        if (state.annotationRedoStack.length === 0) return null;
+        const entry =
+          state.annotationRedoStack[state.annotationRedoStack.length - 1];
+        set({
+          annotationRedoStack: state.annotationRedoStack.slice(0, -1),
+          annotationUndoStack: [
+            ...state.annotationUndoStack.slice(-49),
+            {
+              ...entry,
+              action:
+                entry.action === 'create'
+                  ? ('delete' as const)
+                  : ('create' as const),
+            },
+          ],
+        });
+        return entry;
+      },
+      fixStackTopAnnotation: (stack, annotation) =>
+        set((state) => {
+          const target = stack === 'undo' ? 'annotationUndoStack' : 'annotationRedoStack';
+          const arr = state[target];
+          if (arr.length === 0) return {};
+          const updated = [...arr];
+          updated[updated.length - 1] = { ...updated[updated.length - 1], annotation };
+          return { [target]: updated };
+        }),
     }),
     {
       name: 'lens-ui-storage',
-      // We only persist panel widths and tree states
       partialize: (state) => ({
         leftPanelWidth: state.leftPanelWidth,
         rightPanelWidth: state.rightPanelWidth,
         expandedCodeNodeIds: state.expandedCodeNodeIds,
         recentProjects: state.recentProjects,
       }),
-    }
-  )
+    },
+  ),
 );
