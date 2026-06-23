@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
-use tauri::{State, command};
 use super::projects::AppState;
+use serde::{Deserialize, Serialize};
+use tauri::{command, State};
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -37,7 +37,7 @@ pub async fn search_query_internal(
         // "Search within code" filter
         // We only want document matches where the matched character offset is within a selection tagged with `code_id`.
         // To do this perfectly in SQLite is very complex because `snippet()` doesn't expose the byte offset easily.
-        // For MVP, we'll just restrict document searches to documents that HAVE that code, 
+        // For MVP, we'll just restrict document searches to documents that HAVE that code,
         // or we return all FTS matches for documents that have that code and rely on the UI to jump to the right place.
         // Actually, let's just do the document filter: the document must contain an annotation with that code.
         sqlx::query_as::<_, SearchResult>(

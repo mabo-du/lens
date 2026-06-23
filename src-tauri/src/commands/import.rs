@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, State, command};
-use uuid::Uuid;
 use std::path::PathBuf;
+use tauri::{command, AppHandle, State};
+use uuid::Uuid;
 
 use super::projects::AppState;
-use crate::import::{normalise, txt, pdf};
+use crate::import::{normalise, pdf, txt};
 
 /// Extractor identifier written to the `document.extractor_id` column for
 /// DOCX imports. The current path extracts text in the renderer via Mammoth.js
@@ -16,8 +16,7 @@ const MAMMOTH_EXTRACTOR_ID: &str = "mammoth-1.12.0";
 /// Extractor identifier for PDF imports. The version is baked in at build
 /// time via `build.rs` reading `pdfplumber.__version__`; falls back to
 /// "pdfplumber-unknown" if python3 isn't available at build time.
-const PDFPLUMBER_EXTRACTOR_ID: &str =
-    concat!("pdfplumber-", env!("PDFPLUMBER_VERSION"));
+const PDFPLUMBER_EXTRACTOR_ID: &str = concat!("pdfplumber-", env!("PDFPLUMBER_VERSION"));
 
 #[derive(Serialize, Deserialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -33,7 +32,8 @@ pub struct Document {
     pub word_count: i32,
     pub imported_at: String,
     pub sort_order: i32,
-}pub async fn documents_import_internal(
+}
+pub async fn documents_import_internal(
     app: Option<&AppHandle>,
     state: &AppState,
     project_id: String,
@@ -61,23 +61,19 @@ pub struct Document {
     // in ACTION_PLAN §1.4).
     let text_content = match raw_text {
         Some(text) => text,
-        None => {
-            match file_format.as_str() {
-                "txt" => txt::extract_text(&file_path)?,
-                "docx" => {
-                    return Err(
-                        "DOCX extraction must be performed in the renderer. \
+        None => match file_format.as_str() {
+            "txt" => txt::extract_text(&file_path)?,
+            "docx" => {
+                return Err("DOCX extraction must be performed in the renderer. \
                          Re-import via the Document List panel."
-                            .to_string(),
-                    );
-                }
-                "pdf" => {
-                    let app = app.ok_or("PDF extraction requires AppHandle")?;
-                    pdf::extract_text(app, &file_path).await?
-                }
-                other => return Err(format!("Unsupported format: {}", other)),
+                    .to_string());
             }
-        }
+            "pdf" => {
+                let app = app.ok_or("PDF extraction requires AppHandle")?;
+                pdf::extract_text(app, &file_path).await?
+            }
+            other => return Err(format!("Unsupported format: {}", other)),
+        },
     };
 
     // Determine extractor ID for provenance tracking.
@@ -85,7 +81,10 @@ pub struct Document {
         "txt" => "plain-text-1.0",
         "docx" => MAMMOTH_EXTRACTOR_ID,
         "pdf" => PDFPLUMBER_EXTRACTOR_ID,
-        _ => unreachable!("extractor_id: format {} should have been rejected above", file_format),
+        _ => unreachable!(
+            "extractor_id: format {} should have been rejected above",
+            file_format
+        ),
     };
 
     // Normalise
@@ -103,16 +102,18 @@ pub struct Document {
     // Wrap duplicate check + INSERT in a transaction. Together with the
     // UNIQUE(project_id, text_hash) index (migration 02), this prevents
     // concurrent imports from inserting duplicate rows (ACTION_PLAN §2.3).
-    let mut tx = pool.begin().await.map_err(|e| format!("Failed to begin transaction: {}", e))?;
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| format!("Failed to begin transaction: {}", e))?;
 
-    let duplicate_exists: Option<i32> = sqlx::query_scalar(
-        "SELECT 1 FROM document WHERE text_hash = ? AND project_id = ?"
-    )
-    .bind(&text_hash)
-    .bind(&project_id)
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(|e| format!("Failed to check for duplicates: {}", e))?;
+    let duplicate_exists: Option<i32> =
+        sqlx::query_scalar("SELECT 1 FROM document WHERE text_hash = ? AND project_id = ?")
+            .bind(&text_hash)
+            .bind(&project_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(|e| format!("Failed to check for duplicates: {}", e))?;
 
     if duplicate_exists.is_some() {
         return Err("This document has already been imported. To import an updated version, add it as a separate document entry.".to_string());
@@ -120,13 +121,12 @@ pub struct Document {
 
     // Get max sort_order (inside the transaction so sort_order is
     // consistent with the INSERT).
-    let max_sort: Option<i32> = sqlx::query_scalar(
-        "SELECT MAX(sort_order) FROM document WHERE project_id = ?"
-    )
-    .bind(&project_id)
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(|e| format!("Failed to fetch sort_order: {}", e))?;
+    let max_sort: Option<i32> =
+        sqlx::query_scalar("SELECT MAX(sort_order) FROM document WHERE project_id = ?")
+            .bind(&project_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(|e| format!("Failed to fetch sort_order: {}", e))?;
 
     let sort_order = max_sort.unwrap_or(-1) + 1;
 
@@ -149,7 +149,9 @@ pub struct Document {
     .await
     .map_err(|e| format!("Failed to insert document: {}", e))?;
 
-    tx.commit().await.map_err(|e| format!("Failed to commit transaction: {}", e))?;
+    tx.commit()
+        .await
+        .map_err(|e| format!("Failed to commit transaction: {}", e))?;
 
     // Copy original file to assets/ for REFI-QDA export
     if let Ok(folder_guard) = state.project_folder.try_read() {
@@ -190,5 +192,13 @@ pub async fn documents_import(
     file_format: String,
     raw_text: Option<String>,
 ) -> Result<Document, String> {
-    documents_import_internal(Some(&app), &state, project_id, file_path, file_format, raw_text).await
+    documents_import_internal(
+        Some(&app),
+        &state,
+        project_id,
+        file_path,
+        file_format,
+        raw_text,
+    )
+    .await
 }

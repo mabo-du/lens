@@ -1,9 +1,9 @@
-use serde::{Deserialize, Serialize};
-use tauri::{State, command};
-use uuid::Uuid;
-use std::collections::{HashMap, HashSet};
 use super::projects::AppState;
 use crate::colors;
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
+use tauri::{command, State};
+use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -50,13 +50,11 @@ pub async fn codes_create_internal(
         }
         None => {
             // Auto-assign the next palette colour based on existing code count
-            let count: i32 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM code WHERE project_id = ?"
-            )
-            .bind(&project_id)
-            .fetch_one(pool)
-            .await
-            .map_err(|e| e.to_string())?;
+            let count: i32 = sqlx::query_scalar("SELECT COUNT(*) FROM code WHERE project_id = ?")
+                .bind(&project_id)
+                .fetch_one(pool)
+                .await
+                .map_err(|e| e.to_string())?;
             colors::COLORS[count as usize % colors::COLORS.len()].to_string()
         }
     };
@@ -65,32 +63,28 @@ pub async fn codes_create_internal(
 
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
-    sqlx::query(
-        "INSERT INTO code (id, project_id, name, color) VALUES (?, ?, ?, ?)"
-    )
-    .bind(&id)
-    .bind(&project_id)
-    .bind(&name)
-    .bind(&color)
-    .execute(&mut *tx)
-    .await
-    .map_err(|e| format!("Failed to insert code: {}", e))?;
+    sqlx::query("INSERT INTO code (id, project_id, name, color) VALUES (?, ?, ?, ?)")
+        .bind(&id)
+        .bind(&project_id)
+        .bind(&name)
+        .bind(&color)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| format!("Failed to insert code: {}", e))?;
 
-    sqlx::query(
-        "INSERT INTO code_closure (ancestor, descendant, depth) VALUES (?, ?, 0)"
-    )
-    .bind(&id)
-    .bind(&id)
-    .execute(&mut *tx)
-    .await
-    .map_err(|e| format!("Failed to insert self-referencing closure: {}", e))?;
+    sqlx::query("INSERT INTO code_closure (ancestor, descendant, depth) VALUES (?, ?, 0)")
+        .bind(&id)
+        .bind(&id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| format!("Failed to insert self-referencing closure: {}", e))?;
 
     if let Some(parent) = parent_id {
         sqlx::query(
             "INSERT INTO code_closure (ancestor, descendant, depth)
              SELECT ancestor, ?, depth + 1
              FROM code_closure
-             WHERE descendant = ?"
+             WHERE descendant = ?",
         )
         .bind(&id)
         .bind(&parent)
@@ -159,17 +153,24 @@ pub fn build_tree(codes: Vec<Code>, edges: Vec<(String, String)>) -> Vec<CodeTre
     let mut all_descendants: HashSet<String> = HashSet::new();
 
     for (ancestor, descendant) in edges {
-        children_map.entry(ancestor).or_default().push(descendant.clone());
+        children_map
+            .entry(ancestor)
+            .or_default()
+            .push(descendant.clone());
         all_descendants.insert(descendant);
     }
 
-    let roots: Vec<String> = code_map.keys().filter(|id| !all_descendants.contains(*id)).cloned().collect();
+    let roots: Vec<String> = code_map
+        .keys()
+        .filter(|id| !all_descendants.contains(*id))
+        .cloned()
+        .collect();
 
     fn build_node(
         id: &str,
         depth: i32,
         code_map: &HashMap<String, Code>,
-        children_map: &HashMap<String, Vec<String>>
+        children_map: &HashMap<String, Vec<String>>,
     ) -> Option<CodeTreeNode> {
         let c = code_map.get(id)?;
         let mut children = Vec::new();
@@ -229,17 +230,18 @@ pub async fn codes_move_internal(
             return Err(format!("Parent code {} does not exist", parent_id));
         }
 
-        let is_descendant: Option<i32> = sqlx::query_scalar(
-            "SELECT 1 FROM code_closure WHERE ancestor = ? AND descendant = ?"
-        )
-        .bind(&id)
-        .bind(parent_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| e.to_string())?;
+        let is_descendant: Option<i32> =
+            sqlx::query_scalar("SELECT 1 FROM code_closure WHERE ancestor = ? AND descendant = ?")
+                .bind(&id)
+                .bind(parent_id)
+                .fetch_optional(pool)
+                .await
+                .map_err(|e| e.to_string())?;
 
         if is_descendant.is_some() {
-            return Err("Cannot move a code into its own descendant (would create a cycle)".to_string());
+            return Err(
+                "Cannot move a code into its own descendant (would create a cycle)".to_string(),
+            );
         }
     }
 
@@ -250,7 +252,7 @@ pub async fn codes_move_internal(
     sqlx::query(
         "DELETE FROM code_closure
          WHERE descendant IN (SELECT descendant FROM code_closure WHERE ancestor = ?)
-           AND ancestor NOT IN (SELECT descendant FROM code_closure WHERE ancestor = ?)"
+           AND ancestor NOT IN (SELECT descendant FROM code_closure WHERE ancestor = ?)",
     )
     .bind(&id)
     .bind(&id)
@@ -265,7 +267,7 @@ pub async fn codes_move_internal(
              SELECT p.ancestor, s.descendant, p.depth + s.depth + 1
              FROM code_closure p
              CROSS JOIN code_closure s
-             WHERE p.descendant = ? AND s.ancestor = ?"
+             WHERE p.descendant = ? AND s.ancestor = ?",
         )
         .bind(&parent_id)
         .bind(&id)
@@ -299,16 +301,31 @@ pub async fn codes_update(
     let pool = pool_guard.as_ref().ok_or("No project open")?;
 
     if let Some(n) = &name {
-        sqlx::query("UPDATE code SET name = ? WHERE id = ?").bind(n).bind(&id).execute(pool).await.map_err(|e| e.to_string())?;
+        sqlx::query("UPDATE code SET name = ? WHERE id = ?")
+            .bind(n)
+            .bind(&id)
+            .execute(pool)
+            .await
+            .map_err(|e| e.to_string())?;
     }
     if let Some(c) = &color {
         if !colors::is_valid_hex_color(c) {
             return Err(format!("Invalid color: '{}' (must be #RGB or #RRGGBB)", c));
         }
-        sqlx::query("UPDATE code SET color = ? WHERE id = ?").bind(c).bind(&id).execute(pool).await.map_err(|e| e.to_string())?;
+        sqlx::query("UPDATE code SET color = ? WHERE id = ?")
+            .bind(c)
+            .bind(&id)
+            .execute(pool)
+            .await
+            .map_err(|e| e.to_string())?;
     }
     if let Some(d) = &description {
-        sqlx::query("UPDATE code SET description = ? WHERE id = ?").bind(d).bind(&id).execute(pool).await.map_err(|e| e.to_string())?;
+        sqlx::query("UPDATE code SET description = ? WHERE id = ?")
+            .bind(d)
+            .bind(&id)
+            .execute(pool)
+            .await
+            .map_err(|e| e.to_string())?;
     }
 
     let code = sqlx::query_as::<_, Code>(
@@ -322,23 +339,19 @@ pub async fn codes_update(
     Ok(code)
 }
 
-pub async fn codes_delete_internal(
-    state: &AppState,
-    id: String,
-) -> Result<(), String> {
+pub async fn codes_delete_internal(state: &AppState, id: String) -> Result<(), String> {
     let pool_guard = state.db.read().await;
     let pool = pool_guard.as_ref().ok_or("No project open")?;
 
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
     // Find all descendants (including the node itself) via the closure table
-    let descendants: Vec<String> = sqlx::query_scalar(
-        "SELECT descendant FROM code_closure WHERE ancestor = ?"
-    )
-    .bind(&id)
-    .fetch_all(&mut *tx)
-    .await
-    .map_err(|e| e.to_string())?;
+    let descendants: Vec<String> =
+        sqlx::query_scalar("SELECT descendant FROM code_closure WHERE ancestor = ?")
+            .bind(&id)
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
 
     if descendants.is_empty() {
         return Err(format!("Code {} not found", id));
@@ -350,7 +363,8 @@ pub async fn codes_delete_internal(
         separated.push_bind(d);
     }
     separated.push_unseparated(");");
-    query_builder.build()
+    query_builder
+        .build()
         .execute(&mut *tx)
         .await
         .map_err(|e| format!("Failed to delete codes: {}", e))?;
@@ -361,10 +375,7 @@ pub async fn codes_delete_internal(
 }
 
 #[command]
-pub async fn codes_delete(
-    state: State<'_, AppState>,
-    id: String,
-) -> Result<(), String> {
+pub async fn codes_delete(state: State<'_, AppState>, id: String) -> Result<(), String> {
     codes_delete_internal(&state, id).await
 }
 
@@ -376,13 +387,12 @@ pub async fn codes_get_subtree_internal(
     let pool = pool_guard.as_ref().ok_or("No project open")?;
 
     // Find all codes in the subtree (descendants of id, plus id itself)
-    let code_ids: Vec<String> = sqlx::query_scalar(
-        "SELECT descendant FROM code_closure WHERE ancestor = ?"
-    )
-    .bind(&id)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| e.to_string())?;
+    let code_ids: Vec<String> =
+        sqlx::query_scalar("SELECT descendant FROM code_closure WHERE ancestor = ?")
+            .bind(&id)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| e.to_string())?;
 
     if code_ids.is_empty() {
         return Err(format!("Code {} not found", id));
@@ -391,21 +401,25 @@ pub async fn codes_get_subtree_internal(
     // Fetch the codes themselves using QueryBuilder for dynamic IN clause
     let mut query_builder = sqlx::QueryBuilder::new(
         "SELECT id, project_id, name, color, description, created_by, created_at as createdAt
-         FROM code WHERE id IN ("
+         FROM code WHERE id IN (",
     );
     let mut separated = query_builder.separated(", ");
     for cid in &code_ids {
         separated.push_bind(cid);
     }
     separated.push_unseparated(")");
-    let codes: Vec<Code> = query_builder.build_query_as().fetch_all(pool).await.map_err(|e| e.to_string())?;
+    let codes: Vec<Code> = query_builder
+        .build_query_as()
+        .fetch_all(pool)
+        .await
+        .map_err(|e| e.to_string())?;
 
     // Fetch edges ONLY within the subtree (depth=1, both ancestor and descendant in subtree)
     let edges: Vec<(String, String)> = sqlx::query_as(
         "SELECT ancestor, descendant FROM code_closure
          WHERE depth = 1
            AND ancestor IN (SELECT descendant FROM code_closure WHERE ancestor = ?)
-           AND descendant IN (SELECT descendant FROM code_closure WHERE ancestor = ?)"
+           AND descendant IN (SELECT descendant FROM code_closure WHERE ancestor = ?)",
     )
     .bind(&id)
     .bind(&id)

@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
-use tauri::{AppHandle, State, command};
+use std::path::{Component, Path, PathBuf};
+use tauri::{command, AppHandle, State};
 use tokio::sync::RwLock;
 use uuid::Uuid;
-use std::path::{Component, Path, PathBuf};
 
 pub struct AppState {
     pub db: RwLock<Option<SqlitePool>>,
@@ -34,7 +34,7 @@ async fn ensure_local_user_exists(pool: &sqlx::SqlitePool) -> Result<(), String>
     sqlx::query(
         "INSERT INTO local_user (id, display_name) \
          SELECT ?, ? \
-         WHERE NOT EXISTS (SELECT 1 FROM local_user)"
+         WHERE NOT EXISTS (SELECT 1 FROM local_user)",
     )
     .bind(&user_id)
     .bind("Local User")
@@ -73,7 +73,10 @@ fn validate_project_name(name: &str) -> Result<(), String> {
     }
 
     // Reject invalid characters (allow alphanumeric, space, dot, underscore, hyphen)
-    if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == ' ' || c == '.' || c == '_' || c == '-') {
+    if !name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == ' ' || c == '.' || c == '_' || c == '-')
+    {
         return Err(
             "Project name contains invalid characters. Allowed: A-Z, a-z, 0-9, space, dot, underscore, hyphen".to_string()
         );
@@ -94,9 +97,11 @@ pub async fn projects_create_internal(
     project_dir.push(&name);
 
     // Create folder structure
-    std::fs::create_dir_all(&project_dir).map_err(|e| format!("Failed to create project directory: {}", e))?;
+    std::fs::create_dir_all(&project_dir)
+        .map_err(|e| format!("Failed to create project directory: {}", e))?;
     let assets_dir = project_dir.join("assets");
-    std::fs::create_dir_all(&assets_dir).map_err(|e| format!("Failed to create assets directory: {}", e))?;
+    std::fs::create_dir_all(&assets_dir)
+        .map_err(|e| format!("Failed to create assets directory: {}", e))?;
 
     let db_path = project_dir.join("project.qdaproj");
 
@@ -106,15 +111,13 @@ pub async fn projects_create_internal(
     let id = Uuid::new_v4().to_string();
 
     // Create project row
-    sqlx::query(
-        "INSERT INTO project (id, name, description) VALUES (?, ?, ?)"
-    )
-    .bind(&id)
-    .bind(&name)
-    .bind(&description)
-    .execute(&pool)
-    .await
-    .map_err(|e| format!("Failed to insert project: {}", e))?;
+    sqlx::query("INSERT INTO project (id, name, description) VALUES (?, ?, ?)")
+        .bind(&id)
+        .bind(&name)
+        .bind(&description)
+        .execute(&pool)
+        .await
+        .map_err(|e| format!("Failed to insert project: {}", e))?;
 
     // Guarantee a local_user row exists — the export path requires a
     // non-empty GUID per REFI-QDA Projects.xsd (ACTION_PLAN §1.5).
@@ -156,7 +159,7 @@ pub async fn projects_open(
     if !db_path.exists() {
         return Err("Project database not found".to_string());
     }
-    
+
     let pool = crate::db::init_db(&db_path).await?;
 
     // Auto-create local_user if missing (handles projects created before
@@ -170,11 +173,11 @@ pub async fn projects_open(
     .fetch_one(&pool)
     .await
     .map_err(|e| format!("Failed to read project metadata: {}", e))?;
-    
+
     *state.db.write().await = Some(pool);
     let folder = db_path.parent().unwrap().to_path_buf();
     *state.project_folder.write().await = Some(folder);
-    
+
     Ok(project)
 }
 
