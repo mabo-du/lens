@@ -1054,3 +1054,361 @@ async fn closure_table_invariant_3_level_hierarchy() {
     assert!(xc, "X→C (depth 2) should exist");
     assert!(bc, "B→C (depth 1) should still exist");
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4.8 — REFI-QDA .qdpx import integration tests
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn qdpx_import_merge_mode_imports_documents_codes_and_annotations() {
+    use crate::commands::qdpx_import::qdpx_import_internal;
+    use std::io::Write;
+
+    let (state, _temp_dir) = setup_test_state().await;
+
+    let project = projects_create_internal(
+        &state,
+        "QDPX Merge Test".to_string(),
+        None,
+        _temp_dir.path().to_string_lossy().to_string(),
+        None,
+    )
+    .await
+    .expect("Failed to create project");
+
+    // Build a minimal .qdpx ZIP fixture
+    let qdpx_path = _temp_dir.path().join("fixture.qdpx");
+    let file = std::fs::File::create(&qdpx_path).expect("Failed to create test QDPX");
+    let mut zip = zip::ZipWriter::new(file);
+
+    // Source text file
+    zip.start_file(
+        "Sources/interview.txt",
+        zip::write::FileOptions::<()>::default().compression_method(zip::CompressionMethod::Deflated),
+    )
+    .unwrap();
+    zip.write_all(b"Hello world, this is a test interview transcript.")
+        .unwrap();
+
+    // project.qde XML
+    let xml = r##"<?xml version="1.0" encoding="UTF-8"?>
+<Project xmlns="urn:QDA-XML:project:1.0">
+  <CodeBook>
+    <Codes>
+      <Code guid="code-1" name="Theme A" color="#FF5733" />
+    </Codes>
+  </CodeBook>
+  <Sources>
+    <TextSource guid="doc-1" name="interview.txt" plainTextPath="interview.txt">
+      <PlainTextSelection guid="sel-1" startPosition="0" endPosition="11">
+        <Coding>
+          <CodeRef targetGUID="code-1" />
+        </Coding>
+      </PlainTextSelection>
+    </TextSource>
+  </Sources>
+</Project>"##;
+
+    zip.start_file(
+        "project.qde",
+        zip::write::FileOptions::<()>::default().compression_method(zip::CompressionMethod::Deflated),
+    )
+    .unwrap();
+    zip.write_all(xml.as_bytes()).unwrap();
+    zip.finish().unwrap();
+
+    // Import
+    let pool_guard = state.db.read().await;
+    let pool = pool_guard.as_ref().expect("No DB");
+
+    let result = qdpx_import_internal(pool, &qdpx_path.to_string_lossy(), "merge")
+        .await
+        .expect("Import should succeed");
+
+    assert!(result.contains("1 document"), "Result: {}", result);
+    assert!(result.contains("1 code"), "Result: {}", result);
+    assert!(result.contains("1 annotation"), "Result: {}", result);
+
+    // Verify document
+    let doc_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM document")
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(doc_count, 1);
+
+    let doc_title: String = sqlx::query_scalar("SELECT title FROM document LIMIT 1")
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(doc_title, "interview.txt");
+
+    // Verify code
+    let code_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM code")
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(code_count, 1);
+
+    let code_name: String = sqlx::query_scalar("SELECT name FROM code LIMIT 1")
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(code_name, "Theme A");
+
+    // Verify selection (annotation)
+    let sel_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM selection")
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(sel_count, 1);
+
+    // Verify text_selection positions
+    let (start_char, end_char): (i64, i64) =
+        sqlx::query_as("SELECT start_char, end_char FROM text_selection LIMIT 1")
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    assert_eq!(start_char, 0);
+    assert_eq!(end_char, 11);
+
+    drop(pool_guard);
+}
+
+#[tokio::test]
+async fn qdpx_import_replace_mode_clears_existing_data() {
+    use crate::commands::qdpx_import::qdpx_import_internal;
+    use crate::commands::codes::codes_create_internal;
+    use std::io::Write;
+
+    let (state, _temp_dir) = setup_test_state().await;
+
+    let project = projects_create_internal(
+        &state,
+        "QDPX Replace Test".to_string(),
+        None,
+        _temp_dir.path().to_string_lossy().to_string(),
+        None,
+    )
+    .await
+    .expect("Failed to create project");
+
+    let _user_id = seed_local_user(&state).await;
+
+    // Insert a document and code manually first
+    let _doc = documents_import_internal(
+        None,
+        &state,
+        project.id.clone(),
+        "/tmp/old.txt".to_string(),
+        "txt".to_string(),
+        Some("Pre-existing document text.".to_string()),
+    )
+    .await
+    .expect("Failed to import pre-existing document");
+
+    let _code = codes_create_internal(
+        &state,
+        project.id.clone(),
+        None,
+        "Old Code".to_string(),
+        Some("#000000".to_string()),
+    )
+    .await
+    .expect("Failed to create pre-existing code");
+
+    // Build the same .qdpx fixture
+    let qdpx_path = _temp_dir.path().join("replace_fixture.qdpx");
+    let file = std::fs::File::create(&qdpx_path).expect("Failed to create test QDPX");
+    let mut zip = zip::ZipWriter::new(file);
+
+    zip.start_file(
+        "Sources/interview.txt",
+        zip::write::FileOptions::<()>::default().compression_method(zip::CompressionMethod::Deflated),
+    )
+    .unwrap();
+    zip.write_all(b"Replacement text.").unwrap();
+
+    let xml = r##"<?xml version="1.0" encoding="UTF-8"?>
+<Project xmlns="urn:QDA-XML:project:1.0">
+  <CodeBook>
+    <Codes>
+      <Code guid="code-r1" name="Replacement Code" color="#00FF00" />
+    </Codes>
+  </CodeBook>
+  <Sources>
+    <TextSource guid="doc-r1" name="replacement.txt" plainTextPath="interview.txt">
+    </TextSource>
+  </Sources>
+</Project>"##;
+
+    zip.start_file(
+        "project.qde",
+        zip::write::FileOptions::<()>::default().compression_method(zip::CompressionMethod::Deflated),
+    )
+    .unwrap();
+    zip.write_all(xml.as_bytes()).unwrap();
+    zip.finish().unwrap();
+
+    // Import in replace mode
+    let pool_guard = state.db.read().await;
+    let pool = pool_guard.as_ref().expect("No DB");
+
+    let result = qdpx_import_internal(pool, &qdpx_path.to_string_lossy(), "replace")
+        .await
+        .expect("Import should succeed");
+
+    assert!(result.contains("1 document"), "Result: {}", result);
+    assert!(result.contains("1 code"), "Result: {}", result);
+
+    // Old code should be gone
+    let old_code_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM code WHERE name = 'Old Code')")
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    assert!(!old_code_exists, "Old code should be deleted in replace mode");
+
+    // Old document should be gone
+    let old_doc_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM document WHERE title = 'old.txt')")
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    assert!(!old_doc_exists, "Old document should be deleted in replace mode");
+
+    // New data should be present
+    let new_code_name: String = sqlx::query_scalar("SELECT name FROM code LIMIT 1")
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(new_code_name, "Replacement Code");
+
+    let new_doc_title: String = sqlx::query_scalar("SELECT title FROM document LIMIT 1")
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(new_doc_title, "replacement.txt");
+
+    drop(pool_guard);
+}
+
+#[tokio::test]
+async fn qdpx_import_merge_mode_preserves_existing_data() {
+    use crate::commands::qdpx_import::qdpx_import_internal;
+    use crate::commands::codes::codes_create_internal;
+    use std::io::Write;
+
+    let (state, _temp_dir) = setup_test_state().await;
+
+    let project = projects_create_internal(
+        &state,
+        "QDPX Merge Preserve Test".to_string(),
+        None,
+        _temp_dir.path().to_string_lossy().to_string(),
+        None,
+    )
+    .await
+    .expect("Failed to create project");
+
+    let _user_id = seed_local_user(&state).await;
+
+    // Insert a document and code manually first
+    let _doc = documents_import_internal(
+        None,
+        &state,
+        project.id.clone(),
+        "/tmp/existing.txt".to_string(),
+        "txt".to_string(),
+        Some("Pre-existing document text.".to_string()),
+    )
+    .await
+    .expect("Failed to import pre-existing document");
+
+    let _code = codes_create_internal(
+        &state,
+        project.id.clone(),
+        None,
+        "Existing Code".to_string(),
+        Some("#000000".to_string()),
+    )
+    .await
+    .expect("Failed to create pre-existing code");
+
+    // Build the .qdpx fixture
+    let qdpx_path = _temp_dir.path().join("merge_fixture.qdpx");
+    let file = std::fs::File::create(&qdpx_path).expect("Failed to create test QDPX");
+    let mut zip = zip::ZipWriter::new(file);
+
+    zip.start_file(
+        "Sources/imported.txt",
+        zip::write::FileOptions::<()>::default().compression_method(zip::CompressionMethod::Deflated),
+    )
+    .unwrap();
+    zip.write_all(b"Imported text.").unwrap();
+
+    let xml = r##"<?xml version="1.0" encoding="UTF-8"?>
+<Project xmlns="urn:QDA-XML:project:1.0">
+  <CodeBook>
+    <Codes>
+      <Code guid="code-m1" name="Merged Code" color="#0000FF" />
+    </Codes>
+  </CodeBook>
+  <Sources>
+    <TextSource guid="doc-m1" name="imported.txt" plainTextPath="imported.txt">
+    </TextSource>
+  </Sources>
+</Project>"##;
+
+    zip.start_file(
+        "project.qde",
+        zip::write::FileOptions::<()>::default().compression_method(zip::CompressionMethod::Deflated),
+    )
+    .unwrap();
+    zip.write_all(xml.as_bytes()).unwrap();
+    zip.finish().unwrap();
+
+    // Import in merge mode
+    let pool_guard = state.db.read().await;
+    let pool = pool_guard.as_ref().expect("No DB");
+
+    let result = qdpx_import_internal(pool, &qdpx_path.to_string_lossy(), "merge")
+        .await
+        .expect("Import should succeed");
+
+    assert!(result.contains("1 document"), "Result: {}", result);
+    assert!(result.contains("1 code"), "Result: {}", result);
+
+    // Existing code and imported code should coexist
+    let code_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM code")
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(code_count, 2, "Both existing and imported codes should exist");
+
+    // Existing document and imported document should coexist
+    let doc_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM document")
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(doc_count, 2, "Both existing and imported documents should exist");
+
+    // Verify existing code survived
+    let existing_code_exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM code WHERE name = 'Existing Code')",
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    assert!(existing_code_exists, "Existing code should survive merge");
+
+    // Verify imported code exists
+    let merged_code_exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM code WHERE name = 'Merged Code')",
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    assert!(merged_code_exists, "Merged code should be present");
+
+    drop(pool_guard);
+}
