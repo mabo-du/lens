@@ -5,4 +5,5 @@ pub mod export;
 pub mod import;
 pub mod memos;
 pub mod projects;
+pub mod qdpx_import;
 pub mod search;

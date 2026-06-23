@@ -9,7 +9,8 @@ import { memosIpc } from "./ipc/memos";
 import { projectsIpc } from "./ipc/projects";
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { useUiStore } from './store/uiStore';
-import { FolderOpen, Plus, X } from 'lucide-react';
+import { qdpxImportIpc } from './ipc/qdpx_import';
+import { FolderOpen, Plus, Upload, X } from 'lucide-react';
 import "./App.css";
 
 function App() {
@@ -43,6 +44,41 @@ function App() {
       } catch (e) {
         toast.error("Failed to open project: " + e);
       }
+    }
+  };
+
+  const handleQdpxImport = async () => {
+    if (!activeProject) return;
+    const files = await openDialog({
+      multiple: false,
+      filters: [{ name: 'REFI-QDA Project', extensions: ['qdpx'] }],
+    });
+    if (!files || typeof files !== 'string') return;
+
+    // Determine conflict mode
+    const store = useProjectStore.getState();
+    const hasData = store.documents.length > 0 || store.codes.length > 0;
+    let mode: 'merge' | 'replace' = 'merge';
+    if (hasData) {
+      const choice = confirm(
+        'Project already contains data.\n\nOK = Replace (delete all existing data first)\nCancel = Merge (add imported items alongside existing)',
+      );
+      mode = choice ? 'replace' : 'merge';
+    }
+
+    try {
+      const result = await qdpxImportIpc.import(files, mode);
+      toast.success(result);
+      // Reload project data
+      const proj = useProjectStore.getState().activeProject!;
+      const docs = await documentsIpc.list(proj.id);
+      setDocuments(docs);
+      const codesList = await codesIpc.getTree(proj.id);
+      setCodes(codesList);
+      const memosList = await memosIpc.listByProject(proj.id);
+      setMemos(memosList);
+    } catch (e) {
+      toast.error(`Import failed: ${e}`);
     }
   };
 
@@ -84,6 +120,10 @@ function App() {
             <button onClick={() => handleOpenProject()} className="px-4 py-2 bg-slate-200 text-slate-800 rounded hover:bg-slate-300 flex items-center justify-center space-x-2">
               <FolderOpen className="w-4 h-4" />
               <span>Open Project</span>
+            </button>
+            <button onClick={handleQdpxImport} disabled={!activeProject} className="px-4 py-2 bg-slate-200 text-slate-800 rounded hover:bg-slate-300 flex items-center justify-center space-x-2 disabled:opacity-40">
+              <Upload className="w-4 h-4" />
+              <span>Import REFI-QDA</span>
             </button>
           </div>
           {recentProjects.length > 0 && (
