@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use tokio::sync::RwLock;
 
 use crate::commands::projects::AppState;
