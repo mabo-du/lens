@@ -1,18 +1,15 @@
 <!-- gitnexus:start -->
-# GitNexus — LENS
+# LENS — Qualitative Data Analysis (QDA) Desktop App
 
-Qualitative Data Analysis (QDA) desktop app. **Stack:** Tauri 2 (Rust backend + React 19/TypeScript 5 frontend), SQLite via sqlx, TailwindCSS 4, Zustand 5, ProseMirror.
+**Stack:** Tauri 2 (Rust + React 19/TypeScript 5), SQLite via sqlx, TailwindCSS 4, Zustand 5, ProseMirror.
 
-**Verify:** `npx tsc --noEmit && (cd src-tauri && cargo test && cargo build)`
+## Verification
+
+```bash
+npx tsc --noEmit && (cd src-tauri && cargo test && cargo build)
+```
 
 Index: 55 symbols, 52 relationships. Run `npx gitnexus analyze` if stale.
-
-## Rules
-
-- Run `gitnexus_impact` before editing any symbol. Warn user on HIGH/CRITICAL risk.
-- Run `gitnexus_detect_changes()` before committing.
-- Use `gitnexus_query` for conceptual searches, `gitnexus_context` for symbol details.
-- Never rename symbols with find-and-replace; use `gitnexus_rename`.
 
 ## Off-Limits
 
@@ -22,6 +19,27 @@ Index: 55 symbols, 52 relationships. Run `npx gitnexus analyze` if stale.
 - Do NOT install global packages or modify system configuration.
 - Do NOT push, force-push, or rewrite published branches.
 - Do NOT touch `.env*` files; use `.env.example` for reference.
+
+## Rules
+
+- Run `gitnexus_impact` before editing any symbol. Warn user on HIGH/CRITICAL risk.
+- Run `gitnexus_detect_changes()` before committing.
+- Use `gitnexus_query` for conceptual searches, `gitnexus_context` for symbol details.
+- Never rename symbols with find-and-replace; use `gitnexus_rename`.
+
+## Project Structure
+
+| Directory | Purpose |
+|-----------|--------|
+| `src/` | React frontend (components, hooks, IPC bindings, stores) |
+| `src-tauri/` | Rust backend (commands, DB migrations, import/export) |
+| `src-tauri/src/db/migrations/` | SQLite schema migrations (off-limits) |
+| `schemas/` | REFI-QDA XML schemas (off-limits) |
+
+## Hooks
+
+- `charter.yaml` configures pre-commit (`npx tsc --noEmit`) and pre-push (`npx tsc --noEmit && cargo test`).
+- CI: `.github/workflows/charter.yaml` runs Charter on PRs and pushes to main.
 
 ## Resources
 
