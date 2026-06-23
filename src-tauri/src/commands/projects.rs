@@ -175,7 +175,10 @@ pub async fn projects_open(
     .map_err(|e| format!("Failed to read project metadata: {}", e))?;
 
     *state.db.write().await = Some(pool);
-    let folder = db_path.parent().unwrap().to_path_buf();
+    let folder = db_path
+        .parent()
+        .ok_or("Invalid project path (cannot determine parent directory)")?
+        .to_path_buf();
     *state.project_folder.write().await = Some(folder);
 
     Ok(project)
