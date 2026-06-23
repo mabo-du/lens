@@ -10,9 +10,10 @@ import { projectsIpc } from "./ipc/projects";
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { useUiStore } from './store/uiStore';
 import { qdpxImportIpc } from './ipc/qdpx_import';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { EncryptionDialog } from './components/settings/EncryptionDialog';
 import { ConflictDialog } from './components/settings/ConflictDialog';
+import { usePromptDialog } from './hooks/usePromptDialog';
 import { Beaker, FolderOpen, Plus, X } from 'lucide-react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import "./App.css";
@@ -50,27 +51,15 @@ function App() {
   const recentProjects = useUiStore(s => s.recentProjects);
   const removeRecentProject = useUiStore(s => s.removeRecentProject);
 
-  // Encryption dialog state
-  const [encryptOpen, setEncryptOpen] = useState(false);
+  // Prompt dialogs (shared hook)
+  const encryptPrompt = usePromptDialog<string>();
   const [encryptMode, setEncryptMode] = useState<'create' | 'unlock'>('create');
-  const encryptResolve = useRef<((pw: string | null) => void) | null>(null);
-  const promptEncryption = useCallback((mode: 'create' | 'unlock'): Promise<string | null> => {
-    return new Promise((resolve) => {
-      encryptResolve.current = resolve;
-      setEncryptMode(mode);
-      setEncryptOpen(true);
-    });
-  }, []);
-  const handleEncryptConfirm = (password: string) => {
-    encryptResolve.current?.(password);
-    encryptResolve.current = null;
-    setEncryptOpen(false);
+  const promptEncryption = (mode: 'create' | 'unlock') => {
+    setEncryptMode(mode);
+    return encryptPrompt.prompt();
   };
-  const handleEncryptCancel = () => {
-    encryptResolve.current?.(null);
-    encryptResolve.current = null;
-    setEncryptOpen(false);
-  };
+
+  const conflictPrompt = usePromptDialog<'merge' | 'replace'>();
 
   const loadProjectData = async (proj: { id: string; name: string; description: string | null; createdAt: string; updatedAt: string }, folderPath: string) => {
     setActiveProject(proj);
@@ -103,15 +92,7 @@ function App() {
     }
   };
 
-  // QDPX import conflict dialog state
-  const [conflictOpen, setConflictOpen] = useState(false);
-  const conflictResolve = useRef<((choice: 'merge' | 'replace' | null) => void) | null>(null);
-  const promptConflict = useCallback((): Promise<'merge' | 'replace' | null> => {
-    return new Promise((resolve) => {
-      conflictResolve.current = resolve;
-      setConflictOpen(true);
-    });
-  }, []);
+
 
   const handleQdpxImport = async () => {
     if (!activeProject) return;
@@ -126,14 +107,21 @@ function App() {
     const hasData = store.documents.length > 0 || store.codes.length > 0;
     let mode: 'merge' | 'replace' = 'merge';
     if (hasData) {
-      const choice = await promptConflict();
+      const choice = await conflictPrompt.prompt();
       if (!choice) return; // user cancelled
       mode = choice;
     }
 
     try {
       const result = await qdpxImportIpc.import(files, mode);
-      toast.success(result);
+      if (mode === 'replace') {
+        toast.success(result, {
+          action: { label: 'Undo', onClick: handleUndoImport },
+          duration: 8000,
+        });
+      } else {
+        toast.success(result);
+      }
       // Reload project data
       const proj = useProjectStore.getState().activeProject!;
       const docs = await documentsIpc.list(proj.id);
@@ -144,6 +132,23 @@ function App() {
       setMemos(memosList);
     } catch (e) {
       toast.error(`Import failed: ${e}`);
+    }
+  };
+
+  const handleUndoImport = async () => {
+    try {
+      const result = await qdpxImportIpc.undo();
+      toast.success(result);
+      // Reload project data
+      const proj = useProjectStore.getState().activeProject!;
+      const docs = await documentsIpc.list(proj.id);
+      setDocuments(docs);
+      const codesList = await codesIpc.getTree(proj.id);
+      setCodes(codesList);
+      const memosList = await memosIpc.listByProject(proj.id);
+      setMemos(memosList);
+    } catch (e) {
+      toast.error(`Undo failed: ${e}`);
     }
   };
 
@@ -195,10 +200,10 @@ function App() {
     return (
       <>
         <EncryptionDialog
-          open={encryptOpen}
+          open={encryptPrompt.open}
           mode={encryptMode}
-          onConfirm={handleEncryptConfirm}
-          onCancel={handleEncryptCancel}
+          onConfirm={(pw) => encryptPrompt.resolve(pw)}
+          onCancel={() => encryptPrompt.resolve(null)}
         />
         <div className="flex h-screen items-center justify-center bg-slate-100">
         <div className="p-8 bg-white shadow-md rounded-lg text-center space-y-6">
@@ -260,28 +265,16 @@ function App() {
   return (
     <TooltipProvider delay={500}>
       <EncryptionDialog
-        open={encryptOpen}
+        open={encryptPrompt.open}
         mode={encryptMode}
-        onConfirm={handleEncryptConfirm}
-        onCancel={handleEncryptCancel}
+        onConfirm={(pw) => encryptPrompt.resolve(pw)}
+        onCancel={() => encryptPrompt.resolve(null)}
       />
       <ConflictDialog
-        open={conflictOpen}
-        onMerge={() => {
-          conflictResolve.current?.('merge');
-          conflictResolve.current = null;
-          setConflictOpen(false);
-        }}
-        onReplace={() => {
-          conflictResolve.current?.('replace');
-          conflictResolve.current = null;
-          setConflictOpen(false);
-        }}
-        onCancel={() => {
-          conflictResolve.current?.(null);
-          conflictResolve.current = null;
-          setConflictOpen(false);
-        }}
+        open={conflictPrompt.open}
+        onMerge={() => conflictPrompt.resolve('merge')}
+        onReplace={() => conflictPrompt.resolve('replace')}
+        onCancel={() => conflictPrompt.resolve(null)}
       />
       <Workspace onImportQdpx={handleQdpxImport} />
       <Toaster />

@@ -46,6 +46,7 @@ fn main() {
             commands::search::search_query,
             commands::export::export_prepare,
             commands::qdpx_import::qdpx_import,
+            commands::qdpx_import::qdpx_import_undo,
             commands::projects::local_user_get_name,
             commands::projects::local_user_update_name,
             commands::projects::projects_is_encrypted,

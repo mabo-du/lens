@@ -1121,7 +1121,7 @@ async fn qdpx_import_merge_mode_imports_documents_codes_and_annotations() {
     let pool_guard = state.db.read().await;
     let pool = pool_guard.as_ref().expect("No DB");
 
-    let result = qdpx_import_internal(pool, &qdpx_path.to_string_lossy(), "merge")
+    let result = qdpx_import_internal(pool, &qdpx_path.to_string_lossy(), "merge", None)
         .await
         .expect("Import should succeed");
 
@@ -1253,7 +1253,7 @@ async fn qdpx_import_replace_mode_clears_existing_data() {
     let pool_guard = state.db.read().await;
     let pool = pool_guard.as_ref().expect("No DB");
 
-    let result = qdpx_import_internal(pool, &qdpx_path.to_string_lossy(), "replace")
+    let result = qdpx_import_internal(pool, &qdpx_path.to_string_lossy(), "replace", None)
         .await
         .expect("Import should succeed");
 
@@ -1371,7 +1371,7 @@ async fn qdpx_import_merge_mode_preserves_existing_data() {
     let pool_guard = state.db.read().await;
     let pool = pool_guard.as_ref().expect("No DB");
 
-    let result = qdpx_import_internal(pool, &qdpx_path.to_string_lossy(), "merge")
+    let result = qdpx_import_internal(pool, &qdpx_path.to_string_lossy(), "merge", None)
         .await
         .expect("Import should succeed");
 
@@ -1446,7 +1446,7 @@ async fn qdpx_import_rejects_missing_project_qde() {
     let pool_guard = state.db.read().await;
     let pool = pool_guard.as_ref().expect("No DB");
 
-    let err = qdpx_import_internal(pool, &qdpx_path.to_string_lossy(), "merge")
+    let err = qdpx_import_internal(pool, &qdpx_path.to_string_lossy(), "merge", None)
         .await
         .expect_err("Should reject ZIP without project.qde");
 
@@ -1492,7 +1492,7 @@ async fn qdpx_import_rejects_malformed_xml() {
     let pool_guard = state.db.read().await;
     let pool = pool_guard.as_ref().expect("No DB");
 
-    let err = qdpx_import_internal(pool, &qdpx_path.to_string_lossy(), "merge")
+    let err = qdpx_import_internal(pool, &qdpx_path.to_string_lossy(), "merge", None)
         .await
         .expect_err("Should reject malformed XML");
 
@@ -1531,7 +1531,7 @@ async fn qdpx_import_rejects_corrupted_zip() {
     let pool_guard = state.db.read().await;
     let pool = pool_guard.as_ref().expect("No DB");
 
-    let err = qdpx_import_internal(pool, &qdpx_path.to_string_lossy(), "merge")
+    let err = qdpx_import_internal(pool, &qdpx_path.to_string_lossy(), "merge", None)
         .await
         .expect_err("Should reject non-ZIP file");
 
