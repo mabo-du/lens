@@ -13,7 +13,7 @@ Public domain. Lewis Carroll (Charles Lutwidge Dodgson) died in 1898; the works 
 
 ---
 
-These excerpts are deliberately short (well within any reasonable fair-use limit for software testing), and the underlying work is worldwide public domain.
+These excerpts are deliberately short. The underlying work is worldwide public domain; no licence claim or fair-use defence is implied.
 
 The smoke-test LENS importer is expected to extract the prose body, drop the inline image silently, and extract any footnote text alongside the body.
 
