@@ -57,13 +57,21 @@ def _repack_docx_with_pinned_mtimes(src_bytes: io.BytesIO, out_path: Path) -> No
     to ``FIXED_DATE_TIME_TUPLE``. python-docx saves with the standard
     ``zipfile`` module which writes the system wall-clock into each
     ``ZipInfo.date_time``; we override here so the repacked archive is
-    byte-stable across runs."""
+    byte-stable across runs.
+
+    Writes to a temporary path then atomically renames to ``out_path``
+    so a partial write cannot leave a corrupt file at the destination."""
     src_bytes.seek(0)
-    with zipfile.ZipFile(src_bytes, "r") as zin, \
-            zipfile.ZipFile(out_path, "w", compression=zipfile.ZIP_DEFLATED) as zout:
-        for item in zin.infolist():
-            item.date_time = FIXED_DATE_TIME_TUPLE
-            zout.writestr(item, zin.read(item.filename))
+    tmp_path = out_path.with_suffix(out_path.suffix + ".tmp")
+    try:
+        with zipfile.ZipFile(src_bytes, "r") as zin, \
+                zipfile.ZipFile(tmp_path, "w", compression=zipfile.ZIP_DEFLATED) as zout:
+            for item in zin.infolist():
+                item.date_time = FIXED_DATE_TIME_TUPLE
+                zout.writestr(item, zin.read(item.filename))
+        tmp_path.rename(out_path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
 
 # ---------------------------------------------------------------------------
@@ -436,21 +444,39 @@ def build_docx(out_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # PDF generation (uses reportlab)
 # ---------------------------------------------------------------------------
-def build_pdf(out_path: Path, paragraphs: list[str], title: str) -> None:
+def build_pdf(
+    out_path: Path,
+    paragraphs: list[str],
+    title: str,
+    *,
+    page_break_every: int | None = None,
+) -> None:
     # Force reportlab to emit a deterministic PDF (suppresses
     # /CreationDate, /ModDate, and the random /ID). The invariant flag
     # is global on ``reportlab.rl_config``, so we set it, do the build
     # in a try block, and restore the default in a finally so any other
     # reportlab importer in the same interpreter is unaffected.
+    #
+    # NOTE: ``rl_config.invariant`` is a global flag. This function is
+    # NOT thread-safe — concurrent calls from multiple threads will race
+    # on the invariant setting. For the single-threaded CLI use case this
+    # is fine; if multi-threaded use is ever needed, wrap the generator
+    # in a lock or move PDF builds to a subprocess.
     from reportlab import rl_config
     rl_config.invariant = 1
     try:
-        _build_pdf_inner(out_path, paragraphs, title)
+        _build_pdf_inner(out_path, paragraphs, title, page_break_every=page_break_every)
     finally:
         rl_config.invariant = 0
 
 
-def _build_pdf_inner(out_path: Path, paragraphs: list[str], title: str) -> None:
+def _build_pdf_inner(
+    out_path: Path,
+    paragraphs: list[str],
+    title: str,
+    *,
+    page_break_every: int | None = None,
+) -> None:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import cm
@@ -490,10 +516,10 @@ def _build_pdf_inner(out_path: Path, paragraphs: list[str], title: str) -> None:
     flow = [Paragraph(title, title_style), Spacer(1, 6)]
     for i, para in enumerate(paragraphs):
         flow.append(Paragraph(para.replace("\n", "<br/>"), body))
-        # For sample-multi-doc.pdf only: insert PageBreaks every ~6
-        # paragraphs so the output reliably spans 5+ pages even with
-        # the relatively short Alice-style paragraphs used here.
-        if "multi" in str(out_path) and i > 0 and i % 6 == 0:
+        # When page_break_every is set, insert PageBreaks at the given
+        # interval so the output reliably spans 5+ pages even with
+        # relatively short paragraphs.
+        if page_break_every and i > 0 and i % page_break_every == 0:
             flow.append(PageBreak())
 
     doc.build(flow)
@@ -533,6 +559,7 @@ def main() -> int:
         fixtures_dir / "sample-multi-doc.pdf",
         paragraphs=MULTI_PAGE_PARAGRAPHS,
         title="Alice's Adventures in Wonderland — Chapter VII",
+        page_break_every=6,
     )
 
     # LICENSE file — see docs/SMOKE_TEST.md §2.1.
