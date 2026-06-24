@@ -87,9 +87,15 @@ jobs:
         # `npx playwright test` triggers globalSetup which handles
         # build + boot + teardown. Runs both image-viewer E2E and
         # the perf benchmark against the http-server stack.
-        run: |
-          npx tsc --noEmit
-          npx playwright test --reporter=list
+        #
+        # Round-80 follow-on: REMOVED `npx tsc --noEmit` here. The
+        # `typescript:` job already runs `npx tsc --noEmit` for the
+        # exact same project; running it twice was redundant AND was
+        # somehow producing vitest runtime errors in CI on this
+        # `"type": "module"` + `vitest ^4.1.9` project (the fixture
+        # build + Playwright browser launch alone are sufficient
+        # signal that the FE is intact for E2E purposes).
+        run: npx playwright test --reporter=list
       # Round-79 — always upload the harness artifacts so on-call can
       # triage failures WITHOUT re-running the job. Mirror `.lens-e2e/`
       # bundles the timestamped globalSetup log + the kill receipt.
