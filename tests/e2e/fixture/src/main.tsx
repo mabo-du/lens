@@ -13,6 +13,7 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { Toaster } from 'sonner';
 
 // ---------------------------------------------------------------------------
 // 1. Tauri-IPC SHIM  (must run before any `@tauri-apps/api/core` import)
@@ -210,5 +211,6 @@ const fixtureDoc = mockFixture.documents[0] as DocumentRecord;
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
     <ImageViewer document={fixtureDoc} />
+    <Toaster />
   </React.StrictMode>,
 );
