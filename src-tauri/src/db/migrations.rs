@@ -21,6 +21,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "05_relax_plain_text",
         include_str!("migrations/05_relax_plain_text.sql"),
     ),
+    (
+        "06_image_polygon",
+        include_str!("migrations/06_image_polygon.sql"),
+    ),
 ];
 
 pub async fn run_migrations(pool: &SqlitePool) -> Result<(), String> {
