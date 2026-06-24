@@ -108,6 +108,58 @@ test.describe('ImageViewer bbox mode', () => {
     );
     expect(invocations.filter(i => i.cmd === 'image_selection_create').length).toBe(0);
   });
+
+  test('right-click a committed bbox region opens the action Dialog', async ({ page }) => {
+    await gotoFixture(page);
+    await pickFirstCode(page);
+
+    const canvas = page.locator('canvas').first();
+    const box = await canvas.boundingBox();
+    if (!box) throw new Error('Stage canvas not found');
+
+    // Drag-to-create a rectangle region from (40,40) to (200,200).
+    await page.mouse.move(box.x + 40, box.y + 40);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 200, box.y + 200, { steps: 5 });
+    await page.mouse.up();
+
+    // Right-click at the center of the rendered region (120,120).
+    // Retry until React/Konva renders the committed region.
+    await expect(async () => {
+      await page.mouse.click(box.x + 120, box.y + 120, { button: 'right' });
+      await expect(page.getByTestId('region-action-edit-memo')).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 5000 });
+
+    await expect(page.getByTestId('region-action-delete')).toBeVisible();
+  });
+
+  test('Edit Memo... on bbox region opens RegionMemoDialog', async ({ page }) => {
+    await gotoFixture(page);
+    await pickFirstCode(page);
+
+    const canvas = page.locator('canvas').first();
+    const box = await canvas.boundingBox();
+    if (!box) throw new Error('Stage canvas not found');
+
+    // Drag-to-create a rectangle region.
+    await page.mouse.move(box.x + 40, box.y + 40);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 200, box.y + 200, { steps: 5 });
+    await page.mouse.up();
+
+    // Right-click → open action Dialog.
+    await expect(async () => {
+      await page.mouse.click(box.x + 120, box.y + 120, { button: 'right' });
+      await expect(page.getByTestId('region-action-edit-memo')).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 5000 });
+
+    // Click Edit Memo... → RegionMemoDialog opens.
+    await page.getByTestId('region-action-edit-memo').dispatchEvent('click');
+    await expect(page.getByText('Region Memo')).toBeVisible({ timeout: 10_000 });
+    await expect(
+      page.getByRole('dialog', { name: 'Region Memo' }).getByText('Test Code', { exact: true }),
+    ).toBeVisible();
+  });
 });
 
 test.describe('ImageViewer polygon mode', () => {
@@ -330,5 +382,54 @@ test.describe('ImageViewer polygon mode', () => {
         .__LENS_TEST__.fixture.polygons,
     );
     expect(polygons.length).toBe(1);
+  });
+
+  test('Delete button in action Dialog deletes a committed polygon', async ({ page }) => {
+    await gotoFixture(page);
+    await pickFirstCode(page);
+    await page.getByTestId('mode-polygon').click();
+
+    const canvas = page.locator('canvas').first();
+    const box = await canvas.boundingBox();
+    if (!box) throw new Error('Stage canvas not found');
+
+    // Commit a polygon.
+    await page.mouse.click(box.x + 100, box.y + 40);
+    await page.mouse.click(box.x + 200, box.y + 200);
+    await page.mouse.click(box.x + 40, box.y + 220);
+    await page.keyboard.press('Enter');
+
+    // Verify polygon exists in fixture.
+    await expect.poll(async () => {
+      const ps = await page.evaluate(() =>
+        (window as unknown as { __LENS_TEST__: { fixture: { polygons: { length: number }[] } } })
+          .__LENS_TEST__.fixture.polygons,
+      );
+      return ps.length;
+    }, { timeout: 5000 }).toBeGreaterThanOrEqual(1);
+
+    // Open the action Dialog.
+    await expect(async () => {
+      await page.mouse.click(box.x + 120, box.y + 120, { button: 'right' });
+      await expect(page.getByTestId('region-action-delete')).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 5000 });
+
+    // Click Delete.
+    await page.getByTestId('region-action-delete').dispatchEvent('click');
+
+    // Verify delete IPC was called.
+    const invocations = await page.evaluate(() =>
+      (window as unknown as { __LENS_TEST__: { invocations: Array<{ cmd: string }> } })
+        .__LENS_TEST__.invocations,
+    );
+    const deleteCalls = invocations.filter(i => i.cmd === 'image_polygon_delete');
+    expect(deleteCalls.length).toBe(1);
+
+    // Polygon removed from fixture store.
+    const polygons = await page.evaluate(() =>
+      (window as unknown as { __LENS_TEST__: { fixture: { polygons: unknown[] } } })
+        .__LENS_TEST__.fixture.polygons,
+    );
+    expect(polygons.length).toBe(0);
   });
 });
