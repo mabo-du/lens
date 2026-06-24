@@ -1,7 +1,7 @@
 
 import { useProjectStore } from '@/store/projectStore';
 import { useUiStore } from '@/store/uiStore';
-import { FileText, File, FileType2, Trash2 } from 'lucide-react';
+import { FileText, File, FileType2, Trash2, Image } from 'lucide-react';
 import { toast } from 'sonner';
 import { useState } from 'react';
 import { documentsIpc, DocumentRecord } from '@/ipc/documents';
@@ -43,6 +43,10 @@ export function DocumentList() {
       case 'docx': return <FileType2 className="w-4 h-4 text-blue-500" />;
       case 'pdf': return <File className="w-4 h-4 text-red-500" />;
       case 'ocr_pdf': return <File className="w-4 h-4 text-orange-500" />;
+      case 'png':
+      case 'jpg':
+      case 'jpeg':
+        return <Image className="w-4 h-4 text-purple-500" />;
       default: return <File className="w-4 h-4 text-slate-500" />;
     }
   };
@@ -52,7 +56,12 @@ export function DocumentList() {
     const projectId = activeProject.id;
     const files = await open({
       multiple: true,
-      filters: [{ name: 'Documents', extensions: ['txt', 'docx', 'pdf'] }],
+      filters: [
+        {
+          name: 'Documents',
+          extensions: ['txt', 'docx', 'pdf', 'png', 'jpg', 'jpeg'],
+        },
+      ],
     });
     if (!files || files.length === 0) return;
 
@@ -66,11 +75,13 @@ export function DocumentList() {
     for (const filePath of fileList) {
       const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
       try {
-        // All formats (.txt, .docx, .pdf) delegate text extraction to the
-        // Rust side via `documentsIpc.import`. The dispatcher (Rust) chooses
-        // the format-specific extractor: txt, native docx (zip + roxmltree),
-        // or pdfplumber sidecar.
-        if (ext === 'txt' || ext === 'docx' || ext === 'pdf') {
+        // All formats (.txt, .docx, .pdf, .png, .jpg, .jpeg) delegate
+        // extraction to the Rust side via `documentsIpc.import`. The
+        // dispatcher (Rust) chooses the format-specific extractor:
+        // txt (file read), docx (zip + roxmltree), pdf (pdfplumber
+        // sidecar), or image (`image` crate header-only dimension reader).
+        const supportedExts = ['txt', 'docx', 'pdf', 'png', 'jpg', 'jpeg'];
+        if (supportedExts.includes(ext)) {
           const doc = await documentsIpc.import({ projectId, filePath, fileFormat: ext });
           newDocs.push(doc);
         } else {

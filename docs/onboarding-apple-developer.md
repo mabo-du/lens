@@ -90,14 +90,22 @@ Output looks like:
   2) ...
 ```
 
-Copy the entire quoted string (including the colon and parens) — that's
-`APPLE_SIGNING_IDENTITY`.
+Copy the **entire string between the double quotes** — including the
+leading `Developer ID Application:` prefix, your name, and the team ID
+parentheses. That quoted string is the value of `APPLE_SIGNING_IDENTITY`.
 
 ### Convert the .p12 to a base64-encoded single line (for `APPLE_CERTIFICATE`)
 
 ```sh
-base64 -i ~/Desktop/lens-dev-id.p12 -o ~/Desktop/lens-dev-id.p12.b64
-# IMPORTANT: -w 0 (GNU) or omit -w flag entirely (BSD/macOS native base64).
+# macOS / BSD base64 (default on macOS):
+base64 -b 0 -i ~/Desktop/lens-dev-id.p12 -o ~/Desktop/lens-dev-id.p12.b64
+
+# GNU coreutils base64 (default on most Linux distributions):
+base64 -w 0 -i ~/Desktop/lens-dev-id.p12 -o ~/Desktop/lens-dev-id.p12.b64
+
+# IMPORTANT: macOS/BSD base64 uses -b (NOT -w). Omitting -b / -w will
+# produce a 76-column line-wrapped blob, which will break the GitHub
+# Actions secret injection step that pipes it back through `base64 --decode`.
 # Confirm the output is ONE line:
 wc -l ~/Desktop/lens-dev-id.p12.b64
 # Should print: 1 ~/Desktop/lens-dev-id.p12.b64
