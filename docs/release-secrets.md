@@ -47,7 +47,7 @@ per rotation.** The script writes the public key to stdout -- paste that into
   stranded on whatever final release you last signed with the OLD key.
   Tauri 2.x has no built-in mechanism for forcing old-shell-to-new-shell
   migration -- no upgrade prompt for a new pubkey, no `force_update` flag,
-  no `migration_required` hook. Sunset must be driven from the shell UI
+  no `migration_required` flag. Sunset must be driven from the shell UI
   (in-app banner announcing Shell-N is available), by attrition, or by
   macOS-side forcing if the Apple notarisation cert expires (forces
   re-install on next launch via Gatekeeper pressure).
