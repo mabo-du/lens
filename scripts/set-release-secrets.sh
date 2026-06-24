@@ -37,6 +37,7 @@ if [ -r "$KEY_FILE" ]; then
 else
   echo "  (skipped: $KEY_FILE not readable)"
   echo "    To set manually: gh secret set TAURI_SIGNING_PRIVATE_KEY --repo $REPO < $KEY_FILE"
+  echo "    Or override the path: TAURI_KEY_FILE=/abs/path/to/key $0"
 fi
 
 if [ -r "$PASSPHRASE_FILE" ]; then
@@ -44,8 +45,11 @@ if [ -r "$PASSPHRASE_FILE" ]; then
   echo "  TAURI_SIGNING_PRIVATE_KEY_PASSWORD set from $PASSPHRASE_FILE"
 else
   echo "  (skipped: $PASSPHRASE_FILE not readable)"
-  echo "    To set manually: gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD --repo $REPO"
+  echo "    Passphrase fallback paths searched: TAURI_PASSWORD_FILE env,"
+  echo "    default $PASSPHRASE_FILE. To set manually:"
+  echo "      gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD --repo $REPO"
   echo "    (then paste the passphrase on stdin)"
+  echo "    Or override the path: TAURI_PASSWORD_FILE=/abs/path/to/pp $0"
 fi
 
 cat <<'RUNBOOK'

@@ -4,7 +4,7 @@ use tauri::{command, AppHandle, State};
 use uuid::Uuid;
 
 use super::projects::AppState;
-use crate::import::{docx, normalise, pdf, txt};
+use crate::import::{docx, image as image_import, normalise, pdf, txt};
 
 /// Extractor identifier written to the `document.extractor_id` column for
 /// DOCX imports. The current path extracts text in the renderer via Mammoth.js
@@ -15,8 +15,15 @@ const DOCX_EXTRACTOR_ID: &str = "lens-docx-1.0.0";
 
 /// Extractor identifier for PDF imports. The version is baked in at build
 /// time via `build.rs` reading `pdfplumber.__version__`; falls back to
-/// "pdfplumber-unknown" if python3 isn't available at build time.
+/// "pdfplumber-unknown" if requirements.txt can't be parsed at build time.
 const PDFPLUMBER_EXTRACTOR_ID: &str = concat!("pdfplumber-", env!("PDFPLUMBER_VERSION"));
+
+/// Extractor identifier for image imports (PNG/JPG/JPEG). The `image`
+/// crate handles header-only dimension decoding; we hash the raw file
+/// bytes as the `text_hash` for content-based dedup. The version is the
+/// LENS app version since the `image` crate's dimension-reader API has
+/// been stable across 0.24 -> 0.25.
+pub const IMAGE_EXTRACTOR_ID: &str = concat!("image-dec-", env!("CARGO_PKG_VERSION"));
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -27,9 +34,20 @@ pub struct Document {
     pub original_path: Option<String>,
     pub file_format: String,
     pub plain_text: Option<String>,
+    /// Content hash used for race-safe dedup via the
+    /// UNIQUE(project_id, text_hash) index (migration 02):
+    ///   - text documents (txt/docx/pdf): SHA-256 of normalised text.
+    ///   - image documents (png/jpg/jpeg): SHA-256 of raw file bytes.
+    /// A future migration can rename this column to `content_hash`
+    /// once the dual use stabilises across extractors.
     pub text_hash: String,
     pub extractor_id: String,
     pub word_count: i32,
+    /// Intrinsic image width in pixels. NULL for non-image documents
+    /// (txt/docx/pdf/ocr_pdf).
+    pub intrinsic_w: Option<i32>,
+    /// Intrinsic image height in pixels. NULL for non-image documents.
+    pub intrinsic_h: Option<i32>,
     pub imported_at: String,
     pub sort_order: i32,
 }
@@ -45,47 +63,112 @@ pub async fn documents_import_internal(
     // unreachable!() safely — both the extraction and extractor-id
     // matches are guaranteed to only see valid formats.
     match file_format.as_str() {
-        "txt" | "docx" | "pdf" => {}
+        "txt" | "docx" | "pdf" | "png" | "jpg" | "jpeg" => {}
         other => return Err(format!("Unsupported format: {}", other)),
     }
 
     let pool_guard = state.db.read().await;
     let pool = pool_guard.as_ref().ok_or("No project open")?;
 
-    // Determine raw text.
+    // Bundle per-format extraction outcomes. Using a single struct keeps
+    // the dispatch logic balanced (no half-populated variables that the
+    // compiler can't see as uniformly-initialized across arms).
     //
-    // DOCX extraction happens in the renderer via Mammoth.js (see
-    // DocumentList.tsx). The renderer passes the extracted text as
-    // `raw_text`, so DOCX imports must supply this parameter. Direct
-    // Rust-side DOCX extraction is deferred to a future phase (Option A).
-    let text_content = match raw_text {
-        Some(text) => text,
-        None => match file_format.as_str() {
-            "txt" => txt::extract_text(&file_path)?,
-            "docx" => docx::extract_text_from_docx(Path::new(&file_path))?,
-            "pdf" => {
-                let app = app.ok_or("PDF extraction requires AppHandle")?;
-                pdf::extract_text(app, &file_path).await?
+    // DOCX extraction in the renderer (Mammoth.js) is supported via the
+    // `raw_text` parameter (see DocumentList.tsx). The Rust-side docx
+    // path (raw_text: None) is the canonical path used by integration
+    // tests. PDF needs the AppHandle for the pdfplumber sidecar. Images
+    // need only the file path for header-only dimension decoding.
+    struct Extracted<'a> {
+        plain_text: Option<String>,
+        text_hash: String,
+        extractor_id: &'a str,
+        word_count: i32,
+        intrinsic_w: Option<i32>,
+        intrinsic_h: Option<i32>,
+    }
+
+    let extracted: Extracted<'_> = match (raw_text.as_deref(), file_format.as_str()) {
+        (Some(text), _) => {
+            // Renderer-supplied path (DOCX via Mammoth.js in practice;
+            // mirrors DOCX_EXTRACTOR_ID for provenance continuity).
+            let normalised = normalise::normalise_text(text);
+            let text_hash = normalise::compute_hash(&normalised);
+            let word_count = normalise::compute_word_count(&normalised);
+            Extracted {
+                plain_text: Some(normalised),
+                text_hash,
+                extractor_id: DOCX_EXTRACTOR_ID,
+                word_count,
+                intrinsic_w: None,
+                intrinsic_h: None,
             }
-            other => return Err(format!("Unsupported format: {}", other)),
-        },
+        }
+        (None, "txt") => {
+            let text = txt::extract_text(&file_path)?;
+            let normalised = normalise::normalise_text(&text);
+            let text_hash = normalise::compute_hash(&normalised);
+            let word_count = normalise::compute_word_count(&normalised);
+            Extracted {
+                plain_text: Some(normalised),
+                text_hash,
+                extractor_id: "plain-text-1.0",
+                word_count,
+                intrinsic_w: None,
+                intrinsic_h: None,
+            }
+        }
+        (None, "docx") => {
+            let text = docx::extract_text_from_docx(Path::new(&file_path))?;
+            let normalised = normalise::normalise_text(&text);
+            let text_hash = normalise::compute_hash(&normalised);
+            let word_count = normalise::compute_word_count(&normalised);
+            Extracted {
+                plain_text: Some(normalised),
+                text_hash,
+                extractor_id: DOCX_EXTRACTOR_ID,
+                word_count,
+                intrinsic_w: None,
+                intrinsic_h: None,
+            }
+        }
+        (None, "pdf") => {
+            let app_handle = app.ok_or("PDF extraction requires AppHandle")?;
+            let text = pdf::extract_text(app_handle, &file_path).await?;
+            let normalised = normalise::normalise_text(&text);
+            let text_hash = normalise::compute_hash(&normalised);
+            let word_count = normalise::compute_word_count(&normalised);
+            Extracted {
+                plain_text: Some(normalised),
+                text_hash,
+                extractor_id: PDFPLUMBER_EXTRACTOR_ID,
+                word_count,
+                intrinsic_w: None,
+                intrinsic_h: None,
+            }
+        }
+        (None, "png" | "jpg" | "jpeg") => {
+            // Image: hash file bytes for content dedup; no extracted
+            // text. The duplicate-check SELECT below matches against
+            // text_hash, which now holds the file-bytes hash for
+            // images — semantically equivalent (content dedup) without
+            // requiring a schema change.
+            let meta = image_import::extract_metadata(Path::new(&file_path))?;
+            Extracted {
+                // Image plain_text is Some("") (not None) because the
+                // `document.plain_text` column is NOT NULL on the schema.
+                // Future migration (after image-region certification) can
+                // relax this and switch to Some("") -> None.
+                plain_text: Some(String::new()),
+                text_hash: meta.content_hash,
+                extractor_id: IMAGE_EXTRACTOR_ID,
+                word_count: 0,
+                intrinsic_w: Some(meta.width),
+                intrinsic_h: Some(meta.height),
+            }
+        }
+        (None, other) => return Err(format!("Unsupported format: {}", other)),
     };
-
-    // Determine extractor ID for provenance tracking.
-    let extractor_id = match file_format.as_str() {
-        "txt" => "plain-text-1.0",
-        "docx" => DOCX_EXTRACTOR_ID,
-        "pdf" => PDFPLUMBER_EXTRACTOR_ID,
-        _ => unreachable!(
-            "extractor_id: format {} should have been rejected above",
-            file_format
-        ),
-    };
-
-    // Normalise
-    let normalised = normalise::normalise_text(&text_content);
-    let text_hash = normalise::compute_hash(&normalised);
-    let word_count = normalise::compute_word_count(&normalised);
 
     let id = Uuid::new_v4().to_string();
     let file_name = PathBuf::from(&file_path)
@@ -104,7 +187,7 @@ pub async fn documents_import_internal(
 
     let duplicate_exists: Option<i32> =
         sqlx::query_scalar("SELECT 1 FROM document WHERE text_hash = ? AND project_id = ?")
-            .bind(&text_hash)
+            .bind(&extracted.text_hash)
             .bind(&project_id)
             .fetch_optional(&mut *tx)
             .await
@@ -125,24 +208,39 @@ pub async fn documents_import_internal(
 
     let sort_order = max_sort.unwrap_or(-1) + 1;
 
-    // Insert document
-    sqlx::query(
-        "INSERT INTO document (id, project_id, title, original_path, file_format, plain_text, text_hash, extractor_id, word_count, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    // Insert document. The optimistic duplicate-check above is correct
+    // for sequential imports but has a race window for concurrent ones:
+    // both threads can see duplicate_exists=None, then one commits
+    // first, and the second hits the UNIQUE(project_id, text_hash)
+    // index (migration 02). Surface that as the same user-friendly
+    // message so the SQLite error string never leaks out.
+    match sqlx::query(
+        "INSERT INTO document (id, project_id, title, original_path, file_format, plain_text, text_hash, extractor_id, word_count, intrinsic_w, intrinsic_h, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(&id)
     .bind(&project_id)
     .bind(&file_name)
     .bind(&file_path)
     .bind(&file_format)
-    .bind(&normalised)
-    .bind(&text_hash)
-    .bind(extractor_id)
-    .bind(word_count)
+    .bind(&extracted.plain_text)
+    .bind(&extracted.text_hash)
+    .bind(extracted.extractor_id)
+    .bind(extracted.word_count)
+    .bind(extracted.intrinsic_w)
+    .bind(extracted.intrinsic_h)
     .bind(sort_order)
     .execute(&mut *tx)
     .await
-    .map_err(|e| format!("Failed to insert document: {}", e))?;
+    {
+        Ok(_) => {}
+        Err(sqlx::Error::Database(db_err))
+            if db_err.kind() == sqlx::error::ErrorKind::UniqueViolation =>
+        {
+            return Err("This document has already been imported. To import an updated version, add it as a separate document entry.".to_string());
+        }
+        Err(e) => return Err(format!("Failed to insert document: {}", e)),
+    }
 
     tx.commit()
         .await
@@ -167,7 +265,7 @@ pub async fn documents_import_internal(
     // FTS triggers handle indexing automatically
 
     let doc = sqlx::query_as::<_, Document>(
-        "SELECT id, project_id, title, original_path, file_format, plain_text, text_hash, extractor_id, word_count, imported_at, sort_order FROM document WHERE id = ?"
+        "SELECT id, project_id, title, original_path, file_format, plain_text, text_hash, extractor_id, word_count, intrinsic_w, intrinsic_h, imported_at, sort_order FROM document WHERE id = ?"
     )
     .bind(&id)
     .fetch_one(pool)

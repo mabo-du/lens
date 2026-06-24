@@ -1,0 +1,5 @@
+# Pinned pdfplumber version. Read by:
+#   - src-tauri/build.rs (compile-time bake into PDFPLUMBER_VERSION env var)
+#   - scripts/build-sidecar.sh (pip install -r)
+# Keep both consumers in sync when bumping.
+pdfplumber==0.11.4

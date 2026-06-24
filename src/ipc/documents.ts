@@ -10,6 +10,10 @@ export interface DocumentRecord {
   textHash: string;
   extractorId: string;
   wordCount: number;
+  /** Intrinsic image width (pixels). Null for non-image documents. */
+  intrinsicW?: number | null;
+  /** Intrinsic image height (pixels). Null for non-image documents. */
+  intrinsicH?: number | null;
   importedAt: string;
   sortOrder: number;
 }

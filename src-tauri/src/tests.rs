@@ -1114,6 +1114,136 @@ async fn closure_table_invariant_3_level_hierarchy() {
 }
 
 #[tokio::test]
+async fn closure_table_invariant_depth_stacking() {
+    // Regression guard for `p.depth + s.depth + 1` in codes_move_internal.
+    // The original 3-level test moves B to a root (depth-0) target, so the
+    // `+ 1` term dominates and the formula isn't stressed by a stack.
+    // This test moves B underneath X, which itself has ancestor Y. The
+    // expected row Y → C must have depth=3 (Y→X = 1, X→B = 1, B→C = 1),
+    // proving the join correctly sums both operand depths and the offset,
+    // and not merely attaches to the immediate parent.
+    use crate::commands::codes::codes_move_internal;
+
+    let (state, _temp_dir) = setup_test_state().await;
+
+    let project = projects_create_internal(
+        &state,
+        "Depth Stacking Test".to_string(),
+        None,
+        _temp_dir.path().to_string_lossy().to_string(),
+        None,
+    )
+    .await
+    .expect("Failed to create project");
+
+    // Build Y → X (so X's parent-depth is 1 from Y)
+    let y = codes_create_internal(
+        &state,
+        project.id.clone(),
+        None,
+        "Y".to_string(),
+        Some("#cccccc".to_string()),
+    )
+    .await
+    .expect("Failed to create Y");
+    let x = codes_create_internal(
+        &state,
+        project.id.clone(),
+        Some(y.id.clone()),
+        "X".to_string(),
+        Some("#dddddd".to_string()),
+    )
+    .await
+    .expect("Failed to create X");
+
+    // Build A → B → C (3-level subtree to relocate under X)
+    let a = codes_create_internal(
+        &state,
+        project.id.clone(),
+        None,
+        "A".to_string(),
+        Some("#aaaaaa".to_string()),
+    )
+    .await
+    .expect("Failed to create A");
+    let b = codes_create_internal(
+        &state,
+        project.id.clone(),
+        Some(a.id.clone()),
+        "B".to_string(),
+        Some("#bbbbbb".to_string()),
+    )
+    .await
+    .expect("Failed to create B");
+    let c = codes_create_internal(
+        &state,
+        project.id.clone(),
+        Some(b.id.clone()),
+        "C".to_string(),
+        Some("#cccccc".to_string()),
+    )
+    .await
+    .expect("Failed to create C");
+
+    // Move the B subtree (B and C) under X.
+    codes_move_internal(&state, b.id.clone(), Some(x.id.clone()))
+        .await
+        .expect("Failed to move B under X");
+
+    let pool_guard = state.db.read().await;
+    let pool = pool_guard.as_ref().expect("No DB");
+    let rows: Vec<(String, String, i32)> =
+        sqlx::query_as("SELECT ancestor, descendant, depth FROM code_closure")
+            .fetch_all(pool)
+            .await
+            .expect("Failed to query closure table");
+
+    // Helper: pull (ancestor, descendant) -> depth map for lookups.
+    let depth = |anc: &str, desc: &str| -> Option<i32> {
+        rows.iter()
+            .find(|(ra, rd, _)| ra == anc && rd == desc)
+            .map(|(_, _, d)| *d)
+    };
+
+    // Self-references must be at depth 0 for every surviving node.
+    assert_eq!(depth(&y.id, &y.id), Some(0), "Y self at depth 0");
+    assert_eq!(depth(&x.id, &x.id), Some(0), "X self at depth 0");
+    assert_eq!(depth(&b.id, &b.id), Some(0), "B self at depth 0");
+    assert_eq!(depth(&c.id, &c.id), Some(0), "C self at depth 0");
+    // A is isolated (its subtree moved away); A's only remaining row is A→A.
+    assert_eq!(depth(&a.id, &a.id), Some(0), "A isolated self at depth 0");
+
+    // Parent edges under Y:
+    //   Y → X depth=1
+    assert_eq!(depth(&y.id, &x.id), Some(1), "Y→X depth 1");
+
+    // The interesting one: X is now the new parent of B, B is parent of C.
+    // The transitive depth from Y down to C MUST be exactly 3.
+    // (Y→X = 1) + (X→B = 1) + (B→C = 1) — proving p.depth + s.depth + 1
+    // properly composes.
+    assert_eq!(
+        depth(&y.id, &c.id),
+        Some(3),
+        "Y→C must compose transitively to depth 3 (Y→X + X→B + B→C); got {:?}",
+        rows
+    );
+
+    // And the alternate paths through X and B at the proper stacking depths.
+    assert_eq!(depth(&y.id, &b.id), Some(2), "Y→B depth 2");
+    assert_eq!(depth(&x.id, &b.id), Some(1), "X→B depth 1");
+    assert_eq!(depth(&x.id, &c.id), Some(2), "X→C depth 2");
+    assert_eq!(depth(&b.id, &c.id), Some(1), "B→C depth 1 (preserved across move)");
+
+    // Stale A→B and A→C rows must be gone after the move.
+    assert!(depth(&a.id, &b.id).is_none(), "Stale A→B should be gone");
+    assert!(depth(&a.id, &c.id).is_none(), "Stale A→C should be gone");
+    // Stale Y→A/B/C should also not exist — the old subtree was never under Y.
+    assert!(depth(&y.id, &a.id).is_none(), "Y should not see A's old subtree");
+
+    drop(pool_guard);
+}
+
+#[tokio::test]
 async fn qdpx_import_merge_mode_imports_documents_codes_and_annotations() {
     use crate::commands::qdpx_import::qdpx_import_internal;
     use std::io::Write;
@@ -1760,4 +1890,157 @@ async fn qdpx_import_undo_restores_previous_data() {
         .unwrap();
         assert!(!imported_code_exists, "Imported code should not exist after undo");
     }
+}
+
+#[tokio::test]
+async fn documents_import_image_png_populates_intrinsic_dimensions() {
+    // Phase C MVP: image imports must populate intrinsic_w/intrinsic_h,
+    // leave plain_text NULL, set word_count to 0, and copy the asset to
+    // the project's assets/ folder.
+    use crate::commands::projects::AppState;
+    use crate::db;
+    use image::{ImageBuffer, Rgb};
+    use std::path::PathBuf;
+    use tempfile::tempdir;
+    use tokio::sync::RwLock;
+
+    use crate::commands::import::IMAGE_EXTRACTOR_ID;
+
+    let tmp = tempdir().expect("tempdir");
+    let db_path = tmp.path().join("test.qdaproj");
+    let pool = db::init_db(&db_path, None).await.expect("init_db");
+
+    sqlx::query("INSERT INTO project (id, name, description) VALUES (?, ?, NULL)")
+        .bind("proj-test-img")
+        .bind("Image Import Test")
+        .execute(&pool)
+        .await
+        .expect("insert project");
+
+    // Build a fully-valid 7×5 PNG via the `image` crate's own encoder
+    // so the dimension probe under `into_dimensions()` is exercised
+    // against real PNG bytes (not a hand-crafted minimal fixture).
+    let png_path: PathBuf = tmp.path().join("fixture.png");
+    let img: ImageBuffer<Rgb<u8>, Vec<u8>> =
+        ImageBuffer::from_fn(7, 5, |_x, _y| Rgb([128u8, 64, 32]));
+    img.save(&png_path).expect("save png fixture");
+
+    let project_folder = tmp.path().to_path_buf();
+    std::fs::create_dir_all(project_folder.join("assets"))
+        .expect("create assets dir");
+    let state = AppState {
+        db: RwLock::new(Some(pool)),
+        project_folder: RwLock::new(Some(project_folder.clone())),
+        encryption_key: RwLock::new(None),
+    };
+
+    let doc = documents_import_internal(
+        None,
+        &state,
+        "proj-test-img".to_string(),
+        png_path.to_string_lossy().to_string(),
+        "png".to_string(),
+        None,
+    )
+    .await
+    .expect("documents_import_internal for image");
+
+    assert_eq!(doc.file_format, "png");
+    assert_eq!(
+        doc.extractor_id, IMAGE_EXTRACTOR_ID,
+        "extractor_id must reflect image-dec path"
+    );
+    assert_eq!(doc.intrinsic_w, Some(7), "intrinsic width");
+    assert_eq!(doc.intrinsic_h, Some(5), "intrinsic height");
+    assert_eq!(
+        doc.plain_text.as_deref(),
+        Some(""),
+        "image plain_text must be Some(\"\"), got: {:?}",
+        doc.plain_text
+    );
+    assert_eq!(doc.word_count, 0, "image word_count must be 0");
+
+    // text_hash is a 64-char SHA-256 hex (file-bytes hash for images).
+    assert_eq!(
+        doc.text_hash.len(),
+        64,
+        "image text_hash must be 64-char hex, got: {}",
+        doc.text_hash
+    );
+    assert!(doc.text_hash.chars().all(|c| c.is_ascii_hexdigit()));
+
+    // Asset must be copied to assets/<id>.png (powers REFI-QDA export).
+    let asset_path = project_folder.join("assets").join(format!("{}.png", doc.id));
+    assert!(
+        asset_path.exists(),
+        "image asset not copied to assets/ at {:?}",
+        asset_path
+    );
+
+    // File-format index from migration 04 must list this image.
+    let pool_guard = state.db.read().await;
+    let pool = pool_guard.as_ref().expect("No DB");
+    let image_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM document WHERE project_id = ? AND file_format = ?",
+    )
+    .bind("proj-test-img")
+    .bind("png")
+    .fetch_one(pool)
+    .await
+    .expect("query file_format index");
+    assert_eq!(
+        image_count, 1,
+        "file_format index should locate the imported image"
+    );
+    drop(pool_guard);
+}
+
+#[tokio::test]
+async fn documents_import_rejects_unknown_format() {
+    use crate::commands::projects::AppState;
+    use crate::db;
+    use std::path::PathBuf;
+    use tempfile::tempdir;
+    use tokio::sync::RwLock;
+
+    let tmp = tempdir().expect("tempdir");
+    let db_path = tmp.path().join("test.qdaproj");
+    let pool = db::init_db(&db_path, None).await.expect("init_db");
+
+    sqlx::query("INSERT INTO project (id, name, description) VALUES (?, ?, NULL)")
+        .bind("proj-test-fmt")
+        .bind("Format Reject Test")
+        .execute(&pool)
+        .await
+        .expect("insert project");
+
+    // Write a dummy file and ask for an unsupported format ("bmp").
+    let bogus_path: PathBuf = tmp.path().join("anything.bmp");
+    std::fs::write(&bogus_path, b"not really a bmp").expect("write");
+
+    let project_folder = tmp.path().to_path_buf();
+    std::fs::create_dir_all(project_folder.join("assets"))
+        .expect("create assets dir");
+    let state = AppState {
+        db: RwLock::new(Some(pool)),
+        project_folder: RwLock::new(Some(project_folder.clone())),
+        encryption_key: RwLock::new(None),
+    };
+
+    let err = documents_import_internal(
+        None,
+        &state,
+        "proj-test-fmt".to_string(),
+        bogus_path.to_string_lossy().to_string(),
+        "bmp".to_string(),
+        None,
+    )
+    .await
+    .expect_err("bmp format must be rejected at dispatcher");
+
+    assert!(
+        err.contains("Unsupported format"),
+        "error should mention 'Unsupported format'; got: {}",
+        err
+    );
 }
