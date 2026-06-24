@@ -6,6 +6,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { validateProjectNameClient } from '@/lib/validation';
 
 /**
  * Modal dialog that resolves to the trimmed name the user typed, or null on cancel.
@@ -37,29 +38,11 @@ export function ProjectNameDialog({
   const [value, setValue] = useState(initialValue);
   const [error, setError] = useState('');
 
-  const errorFor = (v: string): string => {
-    const trimmed = v.trim();
-    if (!trimmed) return 'Project name must not be empty';
-    if (trimmed.length > 64) return 'Project name must be 64 characters or fewer';
-    if (trimmed.includes('..') || trimmed === '.') return "Project name must not contain '..' or '.'";
-    if (trimmed.startsWith('/') || /^[A-Za-z]:[\\/]/.test(trimmed)) {
-      return 'Project name must not be an absolute path';
-    }
-    if (
-      !trimmed
-        .split('')
-        .every((c) => /[A-Za-z0-9 ._-]/.test(c))
-    ) {
-      return 'Allowed: A-Z, a-z, 0-9, space, dot, underscore, hyphen';
-    }
-    return '';
-  };
-
-  const liveError = error || errorFor(value);
+  const liveError = error || validateProjectNameClient(value);
 
   const handleSubmit = () => {
     const trimmed = value.trim();
-    const err = errorFor(trimmed);
+    const err = validateProjectNameClient(trimmed);
     if (err) {
       setError(err);
       return;

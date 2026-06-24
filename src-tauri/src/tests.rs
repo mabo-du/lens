@@ -887,7 +887,10 @@ async fn project_create_rejects_collision_with_existing_lens_project() {
     // Now create a *new* AppState pointing at the same target dir but
     // targeting the same project name. The collision check must fire
     // BEFORE we attempt to overwrite the existing .qdaproj.
-    let (state2, _temp_dir2) = setup_test_state().await;
+    // Note: only the tempdir from the FIRST setup is needed (the second
+    // call targets the same on-disk path); the second setup's tempdir
+    // is intentionally discarded.
+    let (state2, _) = setup_test_state().await;
     let err = projects_create_internal(
         &state2,
         "Collision Target".to_string(),
