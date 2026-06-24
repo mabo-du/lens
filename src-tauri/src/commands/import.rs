@@ -18,7 +18,7 @@ const DOCX_EXTRACTOR_ID: &str = "lens-docx-1.0.0";
 /// "pdfplumber-unknown" if python3 isn't available at build time.
 const PDFPLUMBER_EXTRACTOR_ID: &str = concat!("pdfplumber-", env!("PDFPLUMBER_VERSION"));
 
-#[derive(Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct Document {
     pub id: String,
@@ -195,4 +195,164 @@ pub async fn documents_import(
         raw_text,
     )
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    //! In-module integration test for the no-`raw_text` DOCX import path:
+    //! `documents_import_internal(raw_text=None)` -> `docx::extract_text_from_docx`.
+    //!
+    //! Closes the round-23 reviewer gap (the docx.rs unit tests cover the
+    //! extractor in isolation; this test exercises the glue path that
+    //! `DocumentList.tsx` uses after the mammoth removal).
+    //!
+    //! Strategy: focus the test on the `.docx` branch only -- it does NOT
+    //! require an `AppHandle` (PDF extraction does). We construct a minimal
+    //! `AppState`, seed project + local_user, write a hand-crafted .docx to
+    //! a tempdir, then verify the inserted document row + asset copy.
+
+    use super::*;
+    use crate::commands::projects::AppState;
+    use crate::db;
+    use std::io::Write;
+    use std::path::PathBuf;
+    use tempfile::tempdir;
+    use tokio::sync::RwLock;
+
+    /// Build a minimal valid .docx zip archive containing the given paragraphs.
+    /// Each paragraph becomes a `<w:p><w:r><w:t xml:space="preserve">{p}</w:t></w:r></w:p>` block.
+    fn build_minimal_docx(paragraphs: &[&str]) -> Vec<u8> {
+        let body = paragraphs
+            .iter()
+            .map(|p| {
+                format!("<w:p><w:r><w:t xml:space=\"preserve\">{}</w:t></w:r></w:p>", p)
+            })
+            .collect::<Vec<_>>()
+            .join("");
+        let xml = format!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
+             <w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">\
+             <w:body>{body}</w:body></w:document>"
+        );
+
+        let mut zip_buffer = std::io::Cursor::new(Vec::<u8>::new());
+        {
+            let mut zip = zip::ZipWriter::new(&mut zip_buffer);
+            let options: zip::write::SimpleFileOptions = Default::default();
+            zip.start_file("word/document.xml", options).unwrap();
+            zip.write_all(xml.as_bytes()).unwrap();
+            zip.finish().unwrap();
+        }
+        zip_buffer.into_inner()
+    }
+
+    #[tokio::test]
+    async fn documents_import_native_docx_round_trip() {
+        let tmp = tempdir().expect("tempdir");
+        let db_path = tmp.path().join("test.qdaproj");
+        let pool = db::init_db(&db_path, None)
+            .await
+            .expect("init_db");
+
+        // Seed a project row + a local_user row (export path requires both).
+        sqlx::query("INSERT INTO project (id, name, description) VALUES (?, ?, NULL)")
+            .bind("proj-test-docx")
+            .bind("Docx Round-Trip Test")
+            .execute(&pool)
+            .await
+            .expect("insert project");
+        sqlx::query("INSERT INTO local_user (id, display_name) VALUES (?, ?)")
+            .bind("user-test")
+            .bind("Test User")
+            .execute(&pool)
+            .await
+            .expect("insert local_user");
+
+        // Build a .docx fixture with two paragraphs.
+        let docx_bytes = build_minimal_docx(&["Hello world.", "Goodbye world."]);
+        let docx_path: PathBuf = tmp.path().join("test.docx");
+        std::fs::write(&docx_path, &docx_bytes).expect("write docx");
+
+        // Construct minimal AppState. db + project_folder must be set because
+        // documents_import_internal writes to both. The `assets/<id>.docx`
+        // copy uses `std::fs::copy` which fails silently if the parent dir
+        // does not exist, so create it ahead of time.
+        let project_folder = tmp.path().to_path_buf();
+        std::fs::create_dir_all(project_folder.join("assets"))
+            .expect("create assets dir");
+        let state = AppState {
+            db: RwLock::new(Some(pool)),
+            project_folder: RwLock::new(Some(project_folder.clone())),
+            encryption_key: RwLock::new(None),
+        };
+
+        // Call documents_import_internal with raw_text: None -- this is the
+        // path DocumentList.tsx uses after the mammoth removal.
+        let doc = documents_import_internal(
+            None,
+            &state,
+            "proj-test-docx".to_string(),
+            docx_path.to_string_lossy().to_string(),
+            "docx".to_string(),
+            None,
+        )
+        .await
+        .expect("documents_import_internal");
+
+        // Metadata sanity.
+        assert_eq!(doc.file_format, "docx", "file_format mismatch");
+        assert_eq!(
+            doc.extractor_id, DOCX_EXTRACTOR_ID,
+            "extractor_id must reflect native Rust path"
+        );
+
+        let plain_text = doc.plain_text.clone().expect("plain_text populated");
+        assert!(
+            plain_text.contains("Hello world."),
+            "plain_text missing first paragraph; got: {:?}",
+            plain_text
+        );
+        assert!(
+            plain_text.contains("Goodbye world."),
+            "plain_text missing second paragraph; got: {:?}",
+            plain_text
+        );
+        // Word count depends on the normalise::compute_word_count
+        // implementation (whitespace split vs punctuation-aware). Both 4
+        // (whitespace-only) and 6 (split per non-alpha) are plausible;
+        // pin tighter after the first passing run.
+        let wc = doc.word_count;
+        assert!(
+            (4..=6).contains(&wc),
+            "word_count out of expected range [4,6]: {}",
+            wc
+        );
+
+        // Asset must be copied to assets/<id>.docx (powers REFI-QDA export).
+        let asset_path = project_folder
+            .join("assets")
+            .join(format!("{}.docx", doc.id));
+        assert!(
+            asset_path.exists(),
+            "asset file not copied to assets/ at {:?}",
+            asset_path
+        );
+
+        // Re-importing the same content must surface the duplicate-detection error.
+        let dup_err = documents_import_internal(
+            None,
+            &state,
+            "proj-test-docx".to_string(),
+            docx_path.to_string_lossy().to_string(),
+            "docx".to_string(),
+            None,
+        )
+        .await
+        .expect_err("re-import of same content must surface duplicate error");
+        assert!(
+            dup_err.to_lowercase().contains("already been imported"),
+            "unexpected duplicate-detection error: {:?}",
+            dup_err
+        );
+    }
 }

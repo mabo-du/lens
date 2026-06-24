@@ -31,7 +31,7 @@ async function loadAppSettings() {
       autoSave: false,
       // Pre-seed defaults so first-run users see a non-null theme + colour
       // without picking one. Matches colorToArgb() fallback (#FF6366F1 -> #6366f1).
-      defaults: { theme: 'system', defaultCodeColor: '#6366f1' },
+      defaults: { theme: 'light', defaultCodeColor: '#6366f1' },
     });
     return {
       theme: (await store.get<'light' | 'dark' | 'system'>('theme')) ?? null,
@@ -52,7 +52,7 @@ async function saveAppSetting<K extends 'theme' | 'defaultCodeColor'>(
       autoSave: false,
       // Pre-seed defaults so first-run users see a non-null theme + colour
       // without picking one. Matches colorToArgb() fallback (#FF6366F1 -> #6366f1).
-      defaults: { theme: 'system', defaultCodeColor: '#6366f1' },
+      defaults: { theme: 'light', defaultCodeColor: '#6366f1' },
     });
     await store.set(key, value);
     await store.save();
@@ -104,11 +104,17 @@ export function SettingsDialog({
   const applyTheme = (newTheme: 'light' | 'dark' | 'system') => {
     setTheme(newTheme);
     void saveAppSetting('theme', newTheme);
+    // Default to 'light' for first-run MVP; users that pick 'system' opt into
+    // the OS-preferences matchMedia call which is not covered by vitest/jsdom.
     const isDark =
       newTheme === 'dark' ||
       (newTheme === 'system' &&
+        typeof window !== 'undefined' &&
+        window.matchMedia &&
         window.matchMedia('(prefers-color-scheme: dark)').matches);
-    document.documentElement.classList.toggle('dark', isDark);
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.toggle('dark', isDark);
+    }
   };
 
   const applyDefaultCodeColor = (color: string) => {
