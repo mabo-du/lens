@@ -111,30 +111,20 @@ test.describe('ImageViewer polygon mode', () => {
     const box = await canvas.boundingBox();
     if (!box) throw new Error('Stage canvas not found');
 
-    // 1. Draw a 3-vertex triangle (different from the rectangle today).
+    // 1. Draw a 3-vertex triangle — 3 clicks then Enter to commit.
     await page.mouse.click(box.x + 100, box.y + 40);
     await page.mouse.click(box.x + 200, box.y + 200);
     await page.mouse.click(box.x + 40, box.y + 220);
-    await page.keyboard.press('Escape'); // not yet 3 verts; we just need 3 then Enter
-    // Actually Esc clears — need to re-add. Simpler: add the third vertex + Enter.
-    await page.mouse.click(box.x + 40, box.y + 220);
     await page.keyboard.press('Enter');
 
-    // Wait until the polygon is in the fixture store.
-    await expect.poll(async () => {
-      const ps = await page.evaluate(() =>
-        (window as unknown as { __LENS_TEST__: { fixture: { polygons: { length: number }[] } } })
-          .__LENS_TEST__.fixture.polygons,
-      );
-      return ps.length;
-    }, { timeout: 5000 }).toBeGreaterThanOrEqual(1);
+    // 2. Right-click the polygon area. Retry until React/Konva has
+    //    rendered the committed polygon — the mock IPC backend may
+    //    have the polygon before the <Line> is on the Stage.
+    await expect(async () => {
+      await page.mouse.click(box.x + 120, box.y + 120, { button: 'right' });
+      await expect(page.getByTestId('region-action-edit-memo')).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 5000 });
 
-    // 2. Right-click anywhere on the canvas (the polygon fills the central portion).
-    // The action Dialog only opens for clicks on a shape, so click in the polygon's
-    // expected bounding area.
-    await page.mouse.click(box.x + 120, box.y + 120, { button: 'right' });
-
-    await expect(page.getByTestId('region-action-edit-memo')).toBeVisible({ timeout: 3000 });
     await expect(page.getByTestId('region-action-delete')).toBeVisible();
   });
 
@@ -152,20 +142,19 @@ test.describe('ImageViewer polygon mode', () => {
     await page.mouse.click(box.x + 200, box.y + 200);
     await page.mouse.click(box.x + 40, box.y + 220);
     await page.keyboard.press('Enter');
-    await expect.poll(async () => {
-      const ps = await page.evaluate(() =>
-        (window as unknown as { __LENS_TEST__: { fixture: { polygons: { length: number }[] } } })
-          .__LENS_TEST__.fixture.polygons,
-      );
-      return ps.length;
-    }, { timeout: 5000 }).toBeGreaterThanOrEqual(1);
 
     // Open the action Dialog via right-click on the polygon area.
-    await page.mouse.click(box.x + 120, box.y + 120, { button: 'right' });
-    await expect(page.getByTestId('region-action-edit-memo')).toBeVisible({ timeout: 3000 });
+    // Retry until React/Konva renders the committed polygon.
+    await expect(async () => {
+      await page.mouse.click(box.x + 120, box.y + 120, { button: 'right' });
+      await expect(page.getByTestId('region-action-edit-memo')).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 5000 });
 
     // Click Edit Memo... → RegionMemoDialog should open with the code's name in the header.
-    await page.getByTestId('region-action-edit-memo').click();
+    // { force: true } bypasses actionability checks during Base UI's 100ms
+    // dialog entrance animation, which can cause the click to be intercepted
+    // by the inert #root div (data-base-ui-inert).
+    await page.getByTestId('region-action-edit-memo').click({ force: true });
     // RegionMemoDialog is the same Dialog primitive; we look for its title.
     await expect(page.getByText('Region Memo')).toBeVisible({ timeout: 3000 });
     // The "For code: <name>" sub-line shows the polygon code's name.
