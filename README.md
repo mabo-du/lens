@@ -17,7 +17,7 @@ Open-source qualitative data analysis (QDA) for the desktop. Import documents, b
 | Layer | Technology |
 |---|---|
 | Desktop shell | Tauri 2 (Rust) |
-| Frontend | React 18 + TypeScript + Vite |
+| Frontend | React 19 + TypeScript + Vite |
 | UI | Tailwind CSS + shadcn/ui |
 | Editor | ProseMirror |
 | Database | SQLite via sqlx (direct, no ORM) |

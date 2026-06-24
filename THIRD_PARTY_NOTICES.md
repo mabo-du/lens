@@ -20,9 +20,9 @@ upstream `LICENSE` files and may drift if any upstream changes its terms.
 | **ProseMirror editor stack** | `prosemirror-model` · `prosemirror-state` · `prosemirror-transform` · `prosemirror-view` | MIT |
 | **State + UI utilities** | `zustand` · `react-resizable-panels` · `react-arborist` · `sonner` · `cmdk` · `clsx` · `tailwind-merge` · `class-variance-authority` | MIT (cva: Apache-2.0 OR MIT dual) |
 | **Headless UI primitives** | `@base-ui/react` 1 | MIT |
-| **Icons + themes** | `lucide-react` · `next-themes` | lucide: ISC; next-themes: MIT |
+| **Icons + themes** | `lucide-react` · `next-themes` | lucide: ISC (verify per `npx license-checker --csv` — pre-`0.4xx` versions of lucide were MIT; the ISC switch is post-fork-and-version-jump); next-themes: MIT |
 | **File / data utilities** | `handlebars` 4 · `jszip` 3 · `@xmldom/xmldom` | MIT (all) |
-| **Geist variable font** | `@fontsource-variable/geist` 5 | SIL Open Font License 1.1 (OFL-1.1) — a font licence, not a software licence. See <https://scripts.sil.org/OFL> for redistribution terms (bundling permitted; not-for-sale as a standalone font; derivative font names must not use "Geist"). |
+| **Geist variable font** | `@fontsource-variable/geist` 5 | SIL Open Font License 1.1 (OFL-1.1) — a font licence, not a software licence. See <https://scripts.sil.org/OFL> for redistribution terms: bundling is permitted; the font may not be sold standalone; derivative fonts cannot use "Geist" as a name (Reserved Font Name); **derivative fonts must themselves remain OFL-licensed** unless the entire superset font collection is relicensed freely. |
 
 ## Runtime — Rust (backend, inside `src-tauri`)
 
@@ -79,16 +79,10 @@ script via a frozen executable. Distribution channels:
 
 When shipping prebuilt binaries (`.dmg`, `.msi`, `.AppImage`, `.deb` from
 `npm run tauri build`), bundle the upstream `LICENSE` files alongside the
-binary so redistribution stays compliant:
-
-- **MIT**, **ISC**: only the upstream permission notice must be preserved.
-- **Apache-2.0**: must include the licence text **and** any `NOTICE` file.
-- **BSD-2-Clause**: must include the licence text.
-- **GPL-2.0 (PyInstaller only)**: the PyInstaller bootloader-exception keeps
-  the application output permissive; no end-user GPL obligation is incurred
-  by shipping the resulting `.AppImage` / `.dmg`.
-- **OFL-1.1 (Geist font)**: must ship the font licence alongside the binary
-  and refrain from selling the font standalone.
+binary so redistribution stays compliant:- **MIT**, **ISC**: only the upstream permission notice must be preserved.
+- **Apache-2.0 (Tauri 2 / sqlx / TypeScript / cva)**: must include the licence text **and** any `NOTICE` file. This is the most-overlooked clause in binary redistribution — Apache-2.0's NOTICE-file requirement (where present upstream) is what breaks down most often.
+- **GPL-2.0 (PyInstaller only, via the sidecar bootloader-exception)**: PyInstaller's bootloader-exception clause keeps the application output permissive; no end-user GPL obligation is incurred by shipping the resulting `.AppImage` / `.dmg`. Only PyInstaller's own bootloader source remains GPL. See <https://www.pyinstaller.org/license.html>.
+- **OFL-1.1 (Geist font)**: must ship the font licence alongside the binary, refrain from selling the font standalone, and reserve the "Geist" name from derivative fonts.
 
 The `npm run tauri build` pipeline should copy these upstream licence texts
 into `src-tauri/binaries/legal/` (or equivalent) prior to packaging; the
