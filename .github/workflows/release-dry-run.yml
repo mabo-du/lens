@@ -1,0 +1,65 @@
+name: Release Dry-Run
+
+# Runs every release step EXCEPT `softprops/action-gh-release@v2` so a
+# maintainer can verify sidecar build, code signing, multiplexing without
+# producing an artefact. Trigger manually from the Actions tab.
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Platform to build (auto = current runner)'
+        required: false
+        default: 'auto'
+
+jobs:
+  verify-release-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Python (for pdfplumber sidecar build)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Type-check + unit tests (BLOCKING)
+        run: |
+          npx tsc --noEmit
+          echo "tsc: clean"
+          npx vitest run
+          (cd src-tauri && cargo test)
+
+      - name: Build pdfplumber sidecar (BLOCKING since release.yml promotion)
+        run: bash scripts/build-sidecar.sh
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Tauri dry-build (no bundle)
+        run: |
+          cd src-tauri
+          npx tauri build --no-bundle
+
+      - name: Upload dry-run artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lens-dry-run-${{ github.sha }}
+          path: |
+            src-tauri/target/release/lens
+            src-tauri/target/release/lens.exe
+            src-tauri/target/release/bundle/
+          if-no-files-found: warn

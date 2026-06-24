@@ -6,7 +6,6 @@ import { toast } from 'sonner';
 import { useState } from 'react';
 import { documentsIpc, DocumentRecord } from '@/ipc/documents';
 import { open } from '@tauri-apps/plugin-dialog';
-import { readFile } from '@tauri-apps/plugin-fs';
 
 export function DocumentList() {
   const documents = useProjectStore(s => s.documents);
@@ -67,15 +66,15 @@ export function DocumentList() {
     for (const filePath of fileList) {
       const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
       try {
-        if (ext === 'docx') {
-          const fileData = await readFile(filePath);
-          const mammoth = await import('mammoth');
-          const result = await mammoth.extractRawText({ arrayBuffer: fileData.buffer });
-          const doc = await documentsIpc.import({ projectId, filePath, fileFormat: 'docx', rawText: result.value });
-          newDocs.push(doc);
-        } else if (ext === 'txt' || ext === 'pdf') {
+        // All formats (.txt, .docx, .pdf) delegate text extraction to the
+        // Rust side via `documentsIpc.import`. The dispatcher (Rust) chooses
+        // the format-specific extractor: txt, native docx (zip + roxmltree),
+        // or pdfplumber sidecar.
+        if (ext === 'txt' || ext === 'docx' || ext === 'pdf') {
           const doc = await documentsIpc.import({ projectId, filePath, fileFormat: ext });
           newDocs.push(doc);
+        } else {
+          toast.error(`Unsupported file extension: ${ext}`);
         }
       } catch (e) {
         console.error(`Failed to import ${filePath}:`, e);

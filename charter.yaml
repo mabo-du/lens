@@ -1,6 +1,14 @@
 # yaml-language-server: $schema=https://use-charter.dev/schema/charter.schema.json
 policy:
   profile: standard
+  languages:
+    - name: javascript
+      runtime: node
+      linter: typescript
+      formatter: prettier
+    - name: rust
+      linter: clippy
+      formatter: rustfmt
 
 toolchain:
   node:
@@ -12,6 +20,7 @@ toolchain:
     version: ">=2.0"
 
 hooks:
+  toolchain: javascript
   pre-commit:
     - npx tsc --noEmit
     - '(cd src-tauri && cargo test)'

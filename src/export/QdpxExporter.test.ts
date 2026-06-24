@@ -155,6 +155,24 @@ describe('QdpxExporter round-trip', () => {
     expect(codeRef.getAttribute('targetGUID')).toBe('code-1');
   });
 
+  it('colorToArgb fallback returns indigo when hex has no leading #', async () => {
+    // End-to-end check: pass a code with a no-`#` colour string and confirm
+    // the resulting XML has `#FF6366F1` (the QdpxExporter fallback) instead
+    // of an attribute error or a malformed `<Code color="6366f1">`.
+    const payload = buildSyntheticPayload();
+    // Override the existing code colour: pass '6366f1' with NO leading #.
+    payload.codes[0]!.color = '6366f1';
+    const plugin = exporterRegistry.get('qdpx')!;
+    const data = await plugin.export(payload);
+    const zip = await JSZip.loadAsync(data);
+    const xml = await zip.file('project.qde')!.async('string');
+    // The fallback path emits `#FF6366F1` (full opacity + indigo).
+    expect(xml).toMatch(/color="#FF6366F1"/);
+    // Sanity: no bare `6366f1` value slipped through (would mean the bug
+    // was reintroduced where the fallback step was skipped).
+    expect(xml).not.toMatch(/color="6366f1"/);
+  });
+
   it('handles a project with zero documents + zero codes (still has project.qde)', async () => {
     const payload = buildSyntheticPayload();
     const data = await exporterRegistry.get('qdpx')!.export({
