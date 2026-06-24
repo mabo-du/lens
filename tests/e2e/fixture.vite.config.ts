@@ -22,7 +22,15 @@ export default defineConfig({
   },
   plugins: [react()],
   server: {
+    host: '127.0.0.1',
     port: 57599,
     strictPort: true,
+  },
+  // Round-78 final: the fixture is built once via `vite build` and
+  // served statically by `npx http-server` from `dist/`. We no longer
+  // need a `preview` block — the static file server handles serving.
+  build: {
+    outDir: path.resolve(__dirname, 'fixture/dist'),
+    emptyOutDir: true,
   },
 });

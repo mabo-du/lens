@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const FIXTURE_URL = 'http://localhost:57599/perf-page.html';
+const FIXTURE_URL = 'http://127.0.0.1:57599/perf-page.html';
 
 interface SizeResult {
   intrinsic_w: number;
