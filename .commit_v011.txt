@@ -1,0 +1,54 @@
+feat(phase-c-2): konva image viewer + plain_text=NULL relaxation + 3 image-region IPC + base64 IPC
+
+Substantial followup to round-70 Phase C MVP image imports. Brings
+image documents to first-class UX parity with text/docx/pdf. Bumps
+version 0.1.0-rc.1 -> 0.1.1.
+
+Schema:
+- migration 05_relax_plain_text.sql: 12-step CREATE TABLE _new rebuild
+  to relax document.plain_text NOT NULL (round-70 lesson: ALTER COLUMN
+  DROP NOT NULL is not portable across bundled SQLite builds). FTS5
+  triggers regenerated with COALESCE(plain_text, '') for NULL safety;
+  INSERT INTO document_fts(document_fts) VALUES('rebuild') re-derives
+  the inverted index after rowid reset. Wrapped in BEGIN TRANSACTION
+  ... COMMIT between PRAGMA foreign_keys bookends for atomicity (so
+  a partial FTS5 'rebuild' failure leaves DB in original state, not
+  half-applied).
+- import.rs dispatcher flip: image branch sets plain_text: None
+  (was Some("")) - consistent with relaxed constraint.
+
+Backend IPC:
+- image_regions.rs (NEW): image_selection_create / list_by_document /
+  delete. Bbox validation enforces 0..1 proportional coords, finite,
+  strict-increasing (right>left, bottom>top), non-zero area. Tx wrap
+  for inserts; JOIN query for list; cascade-delete via parent.
+- documents.rs: document_get_asset_base64 reads PNG/JPG bytes from
+  project assets/ folder.
+- Cargo.toml: base64 = "0.22" dev-dep.
+- main.rs: 4 new invoke_handler entries.
+
+Frontend:
+- ImageViewer.tsx (NEW): react-konva Stage/Layer with KonvaImage
+  (listening=false for non-interactive bitmap overlay); separate Layer
+  hosting translucent Rect for draft bbox. onMouseDown/move/up compute
+  normalized 0..1 via measured container ref. Code picker
+  (FuzzyCodePicker), region list with right-click delete.
+- DocumentEditor.tsx: 35-line round-70 placeholder replaced with
+  one-line <ImageViewer document={document} /> mount inside isImageDocument.
+- package.json: konva + react-konva added.
+- ipc/image-regions.ts (NEW): TS types + handlers.
+- ipc/documents.ts: TS handler for get_asset_base64.
+
+Tests (tests.rs):
+- imports at top of mod tests: use tempfile::tempdir; use crate::db;.
+- image_selection_bbox_round_trip: insert via tx, SELECT via JOIN,
+  delete via cascade.
+- migration_05_relaxes_plain_text: INSERT doc with plain_text=NULL,
+  re-read, assert round-trip.
+- document_get_asset_base64_rejects_non_image: format whitelist
+  precondition (txt must not match ["png", "jpg", "jpeg"]).
+- Updated pre-existing documents_import_image_png_populates_intrinsic_dimensions
+  to expect plain_text=None (matches new dispatcher).
+
+Versions bumped to 0.1.1 in package.json + Cargo.toml + tauri.conf.json.
+CHANGELOG.md: closed [0.1.1] - 2026-06-24 entry, fresh [Unreleased] for v0.2.

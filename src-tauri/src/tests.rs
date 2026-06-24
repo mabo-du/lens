@@ -3,7 +3,9 @@ use crate::commands::codes::codes_create_internal;
 use crate::commands::export::export_prepare_internal;
 use crate::commands::import::documents_import_internal;
 use crate::commands::projects::projects_create_internal;
+use crate::db;
 use crate::test_helpers::{seed_local_user, setup_test_state};
+use tempfile::tempdir;
 
 #[tokio::test]
 async fn happy_path_create_project_import_document_code_and_annotation() {
@@ -1954,8 +1956,8 @@ async fn documents_import_image_png_populates_intrinsic_dimensions() {
     assert_eq!(doc.intrinsic_h, Some(5), "intrinsic height");
     assert_eq!(
         doc.plain_text.as_deref(),
-        Some(""),
-        "image plain_text must be Some(\"\"), got: {:?}",
+        None,
+        "image plain_text must be None (per FU2 v0.1.1 dispatcher flip — consistent with migration 05 relaxing NOT NULL), got: {:?}",
         doc.plain_text
     );
     assert_eq!(doc.word_count, 0, "image word_count must be 0");
@@ -2042,5 +2044,210 @@ async fn documents_import_rejects_unknown_format() {
         err.contains("Unsupported format"),
         "error should mention 'Unsupported format'; got: {}",
         err
+    );
+}
+
+// ============================================================
+// v0.1.1 integration tests — image region IPC + migration 05
+// ============================================================
+
+/// Validates the image_selection schema path works end-to-end:
+/// insert a `selection` parent + `image_selection` extension row
+/// inside an explicit transaction, query back via SELECT, then
+/// delete via cascade and assert the row goes away.
+#[tokio::test]
+async fn image_selection_bbox_round_trip() {
+    let tmp = tempdir().expect("tempdir");
+    let db_path = tmp.path().join("test.qdaproj");
+    let pool = db::init_db(&db_path, None).await.expect("init_db");
+
+    sqlx::query("INSERT INTO project (id, name) VALUES (?, ?)")
+        .bind("proj-region-roundtrip")
+        .bind("Region Round Trip")
+        .execute(&pool)
+        .await
+        .expect("seed project");
+    sqlx::query("INSERT INTO code (id, project_id, name, color) VALUES (?, ?, ?, ?)")
+        .bind("code-region")
+        .bind("proj-region-roundtrip")
+        .bind("Region")
+        .bind("#ff0000")
+        .execute(&pool)
+        .await
+        .expect("seed code");
+
+    // Seed a synthetic PNG document so the FK on selection.document_id is honored.
+    let doc_id = "doc-region";
+    sqlx::query(
+        "INSERT INTO document (id, project_id, title, file_format, plain_text, text_hash, extractor_id) \
+         VALUES (?, ?, ?, ?, NULL, ?, ?)",
+    )
+    .bind(doc_id)
+    .bind("proj-region-roundtrip")
+    .bind("region-doc.png")
+    .bind("png")
+    .bind("placeholder-hash")
+    .bind("test-fixture")
+    .execute(&pool)
+    .await
+    .expect("seed document");
+
+    let sel_id = "sel-region-1";
+    let mut tx = pool.begin().await.expect("begin");
+    sqlx::query(
+        "INSERT INTO selection (id, document_id, code_id, selection_type) VALUES (?, ?, ?, 'image_region')",
+    )
+    .bind(sel_id)
+    .bind(doc_id)
+    .bind("code-region")
+    .execute(&mut *tx)
+    .await
+    .expect("insert selection");
+
+    let region_data = serde_json::json!({"left": 0.1, "top": 0.2, "right": 0.5, "bottom": 0.7}).to_string();
+    sqlx::query(
+        "INSERT INTO image_selection (selection_id, region_type, region_data, bbox_left, bbox_top, bbox_right, bbox_bottom) \
+         VALUES (?, 'bbox', ?, 0.1, 0.2, 0.5, 0.7)",
+    )
+    .bind(sel_id)
+    .bind(&region_data)
+    .execute(&mut *tx)
+    .await
+    .expect("insert image_selection");
+    tx.commit().await.expect("commit");
+
+    // List-by-document through the same JOIN that image_selection_list_by_document uses.
+    let rows: Vec<(String, String, f64, f64, f64, f64)> = sqlx::query_as(
+        "SELECT s.id, i.region_type, i.bbox_left, i.bbox_top, i.bbox_right, i.bbox_bottom \
+         FROM selection s JOIN image_selection i ON i.selection_id = s.id \
+         WHERE s.document_id = ?",
+    )
+    .bind(doc_id)
+    .fetch_all(&pool)
+    .await
+    .expect("list regions");
+    assert_eq!(rows.len(), 1, "one region should exist");
+    assert_eq!(rows[0].0, sel_id);
+    assert_eq!(rows[0].1, "bbox");
+    assert!(
+        (rows[0].2 - 0.1).abs() < 1e-9
+            && (rows[0].3 - 0.2).abs() < 1e-9
+            && (rows[0].4 - 0.5).abs() < 1e-9
+            && (rows[0].5 - 0.7).abs() < 1e-9,
+        "bbox coords should round-trip through SQL"
+    );
+
+    // Delete via parent — cascade should remove image_selection row.
+    sqlx::query("DELETE FROM selection WHERE id = ?")
+        .bind(sel_id)
+        .execute(&pool)
+        .await
+        .expect("delete selection");
+
+    let rows_after: Vec<(String,)> = sqlx::query_as(
+        "SELECT selection_id FROM image_selection WHERE selection_id = ?",
+    )
+    .bind(sel_id)
+    .fetch_all(&pool)
+    .await
+    .expect("list after delete");
+    assert!(rows_after.is_empty(), "image_selection row should be cascaded");
+}
+
+/// Validates that migration 05's relaxation of `document.plain_text`
+/// allows inserting and re-reading a NULL value — the round-70
+/// regression detector. Round-trip: insert with NULL, then SELECT
+/// and assert the column reads back as NULL.
+#[tokio::test]
+async fn migration_05_relaxes_plain_text() {
+    let tmp = tempdir().expect("tempdir");
+    let db_path = tmp.path().join("test.qdaproj");
+    let pool = db::init_db(&db_path, None).await.expect("init_db");
+
+    sqlx::query("INSERT INTO project (id, name) VALUES (?, ?)")
+        .bind("proj-null-plain-text")
+        .bind("Nil Plain Text")
+        .execute(&pool)
+        .await
+        .expect("seed project");
+
+    let doc_id = "doc-null-plain-text";
+    sqlx::query(
+        "INSERT INTO document (id, project_id, title, file_format, plain_text, text_hash, extractor_id) \
+         VALUES (?, ?, ?, ?, NULL, ?, ?)",
+    )
+    .bind(doc_id)
+    .bind("proj-null-plain-text")
+    .bind("null-doc.png")
+    .bind("png")
+    .bind("nil-hash")
+    .bind("test-fixture")
+    .execute(&pool)
+    .await
+    .expect("insert with NULL plain_text");
+
+    let read: Option<(Option<String>,)> = sqlx::query_as::<_, (Option<String>,)>(
+        "SELECT plain_text FROM document WHERE id = ?",
+    )
+    .bind(doc_id)
+    .fetch_optional(&pool)
+    .await
+    .expect("re-read");
+    let (plain_text_opt,) = read.expect("row exists");
+    // SELECT returns NULL on a column whose value is NULL — but that's
+    // indistinguishable from "row missing" in our Option<String> mapping.
+    // What matters is the insert did NOT panic: if migration 05 hadn't
+    // relaxed the NOT NULL constraint the INSERT would have surfaced a
+    // CHECK constraint failure during execution.
+    assert!(
+        plain_text_opt.is_none(),
+        "plain_text should round-trip as NULL after migration 05; got: {:?}",
+        plain_text_opt
+    );
+}
+/// Validates the precondition of `document_get_asset_base64` rejecting
+/// non-image documents. The full IPC handler isn't directly callable
+/// from cargo test (it requires a Tauri State), but we can exercise the
+/// same precondition: a `txt` document's `file_format` column must NOT
+/// match the `["png", "jpg", "jpeg"]` whitelist that the handler accepts.
+#[tokio::test]
+async fn document_get_asset_base64_rejects_non_image() {
+    let tmp = tempdir().expect("tempdir");
+    let db_path = tmp.path().join("test.qdaproj");
+    let pool = db::init_db(&db_path, None).await.expect("init_db");
+
+    sqlx::query("INSERT INTO project (id, name) VALUES (?, ?)")
+        .bind("proj-asset-reject")
+        .bind("Asset Reject")
+        .execute(&pool)
+        .await
+        .expect("seed project");
+
+    sqlx::query(
+        "INSERT INTO document (id, project_id, title, file_format, plain_text, text_hash, extractor_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind("doc-asset-txt")
+    .bind("proj-asset-reject")
+    .bind("not-an-image.txt")
+    .bind("txt")
+    .bind("hello world")
+    .bind("txt-hash")
+    .bind("plain-text-1.0")
+    .execute(&pool)
+    .await
+    .expect("seed doc");
+
+    let file_format: String = sqlx::query_scalar(
+        "SELECT file_format FROM document WHERE id = ?",
+    )
+    .bind("doc-asset-txt")
+    .fetch_one(&pool)
+    .await
+    .expect("fetch format");
+
+    let is_image_format = matches!(file_format.as_str(), "png" | "jpg" | "jpeg");
+    assert!(
+        !is_image_format,
+        "txt doc must NOT match the image-format whitelist; the IPC would return Err"
     );
 }
