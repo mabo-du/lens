@@ -1,44 +1,105 @@
-# Release Secrets (Tauri + Apple notarisation)
+# Release secrets
 
-LENS release artefacts are signed + notarised so end users get a verified
-download. Keys and credentials live in the repo's
-`Settings -> Secrets and variables -> Actions` page; nothing is committed.
-They are referenced by `.github/workflows/release.yml` via `secrets.*` and
-consumed at GitHub-Actions time only.
+Catalogue of every GitHub-Actions secret (and local developer secret) required to
+ship a signed, notarised LENS build via `release.yml`. **Internal docs only --
+do not commit any secret value.**
 
-## Secrets catalogue
+| Secret | Purpose | Where to obtain |
+|--------|---------|-----------------|
+| `TAURI_SIGNING_PRIVATE_KEY` | Tauri auto-updater signing key (age) | `scripts/generate-signing-key.sh` (passphrase piped via stdin) |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Passphrase for the above | Same script (prompts on local machine; paste output into GH secret) |
+| `APPLE_CERTIFICATE` | base64 of `lens-dev-id.p12` | `p12-export.txt` from Keychain Access after exporting Developer ID Application cert |
+| `APPLE_CERTIFICATE_PASSWORD` | Passphrase protecting the .p12 | Whatever you set when exporting from Keychain |
+| `APPLE_SIGNING_IDENTITY` | Apple Developer ID common name | `security find-identity -v -p codesigning` |
+| `APPLE_ID` | Apple Developer account email | Apple Developer Program enrollment |
+| `APPLE_PASSWORD` | App-specific password for notarisation | https://appleid.apple.com -> App-Specific Passwords |
 
-| Secret                                | What it is for                                       | How to obtain                                                                   |
-| ------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `TAURI_SIGNING_PRIVATE_KEY`           | Signs `.updater` bundles so the updater plugin accepts them | `cargo install tauri-cli && cd src-tauri && tauri signer generate -w ~/.tauri/lens.key`. Paste the contents of `~/.tauri/lens.key`. |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`  | Decrypts the key above at signing time               | The password chosen at `tauri signer generate`. |
-| `APPLE_CERTIFICATE`                   | base64-encoded DeveloperIDApplication.p12           | Export from Keychain Access: Certificates -> Apple Distribution. `base64 -i file.p12 \| pbcopy`. |
-| `APPLE_CERTIFICATE_PASSWORD`          | Decrypts the .p12                                    | The password set at export time. |
-| `APPLE_ID`                            | Apple ID email for notarytool                       | A Developer Program account email. |
-| `APPLE_PASSWORD`                      | App-specific password (NOT the Apple ID password)   | `appleid.apple.com -> Sign-In and Security -> App-Specific Passwords`. |
-| `APPLE_TEAM_ID`                       | 10-char Apple Developer Team ID                      | `developer.apple.com -> Account -> Membership details`. |
+See `tauri.conf.json` field `plugins.updater.pubkey` for the **public** half of
+the Tauri signing key that must match the private half in `TAURI_SIGNING_PRIVATE_KEY`.
 
 ## Scaffolder
 
-`scripts/generate-signing-key.sh <key-path>` runs `tauri signer generate` with
-a piped passphrase so it works in CI dry-runs. For developer machines, the
-plain `tauri signer generate` flow is interactive and the keys never leave
-the developer's `~/.tauri/` directory.
+`scripts/generate-signing-key.sh` wraps `tauri signer generate` and feeds the
+passphrase via stdin so the dry-run variant works headlessly. **Run this once
+per rotation.** The script writes the public key to stdout -- paste that into
+`plugins.updater.pubkey` in `tauri.conf.json`.
+
+## Rotation-during-release
+
+`plugins.updater.pubkey` is baked at *compile* time. Risks:
+
+- **No collision**: an in-flight release using the OLD key remains installable
+  via the OLD key. A subsequent release using the NEW key serves via the NEW
+  pubkey baked into that build. Tauri's updater downloads `latest.json` from
+  the current GitHub Releases endpoint -- the pubkey required to validate is
+  whatever was current at the moment that `latest.json` was uploaded.
+- **Compile-baked caveat**: the pubkey is baked into the *shell binary* at
+  compile time. Auto-update does NOT migrate pubkey -- a user on Shell A
+  (pubkey A baked in) keeps pubkey A regardless of which signed releases they
+  update *to*. Rotation requires shipping a *new shell build* via canonical
+  installer, not just a new signed release.
+- **Parallel cohorts**: after rotation, the old-shell cohort (pubkey O) and
+  the new-shell cohort (pubkey N) continue receiving releases on *parallel
+  codepaths* indefinitely -- old-shell users update to releases signed with O,
+  new-shell users update to releases signed with N. Tauri's updater accepts
+  exactly one pubkey per shell build (no fallback key list). **Plan a sunset
+  date for the old-shell cohort** before rotating, otherwise that cohort is
+  stranded on whatever final release you last signed with the OLD key.
+  Tauri has no built-in upgrade-prompt-for-shell-pubkey mechanism -- sunset
+  is achieved via (a) in-app banner for old-shell users announcing Shell-N is
+  available, (b) attrition, or (c) macOS-side forcing if the Apple notarisation
+  cert expires (forces re-install on next launch). Tauri 2.x does NOT ship a
+  built-in `force_update` / `migration_required` flag for the updater; sunset
+  cannot be enforced from the updater itself -- only from the shell UI or via
+  macOS Gatekeeper pressure.
+- **URL-endpoint caveat**: do NOT swap the `Releases/latest.json` URL endpoint
+  at the same time as a pubkey rotation. Sequence them.
+- **Rollback**: if a partial rollout fails half-way (signing server error mid
+  publish), users who have installed the new-pubkey shell cannot auto-update
+  back to OLD-pubkey-signed releases without manual install of the old shell.
+  Old-pubkey-signed releases stay valid *for old shells only* -- they don't
+  help users who have already installed a new-pubkey shell. Keep at least one
+  signed release per pubkey in `Releases/` indefinitely so the matching shell
+  cohort still has a downgrade path.
+
+**Example** *(illustrative; substitute your actual rotation dates)*. Rotating on 2026-07-01 = publish Shell-N (pubkey N baked in).
+Users on Shell-O (pubkey O baked in) keep receiving releases signed with O on a
+parallel codepath. Pre-rotation milestone (e.g. 2026-08-15) = publish final
+Shell-O release so the O cohort has a known-good final version; post-2026-08-15
+the Shell-O cohort is technically still updateable within its sign-set, but
+new feature work only targets Shell-N.
 
 ## Rotation
 
-1. Generate a new key pair on a developer machine with `tauri signer generate`.
-2. Update `bundle.updater.pubkey` in `src-tauri/tauri.conf.json` (this is the
-   PUBLIC half -- safe to commit) with the new `*.key.pub` contents.
-3. Paste the new private key into `TAURI_SIGNING_PRIVATE_KEY` and the new
-   password into `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Delete the old values
-   from `Secrets and variables -> Actions`.
-4. Push a tag to trigger a fresh release; existing installs will be locked
-   to the OLD key until they manually upgrade. New installs will use the new key.
+Two independent rotation lifecycles -- trigger them separately, do not assume
+they rotate together:
 
-## Dry-run
+### Tauri signing key (age)
 
-`scripts/release-dry-run.sh` (or `.github/workflows/release-dry-run.yml` via
-`workflow_dispatch`) runs every release step EXCEPT `softprops/action-gh-release`.
-Useful for catching sidecar / signing / notarisation failures without
-publishing artefacts. Sidecar build is blocking (no `continue-on-error`).
+1. Run `scripts/generate-signing-key.sh` locally.
+2. Paste the old pubkey aside, copy the new pubkey into `plugins.updater.pubkey`
+   in `tauri.conf.json`.
+3. Update `TAURI_SIGNING_PRIVATE_KEY` + `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+   in GitHub repo settings.
+4. Trigger `release.yml` against the next tag. The new build embeds the new
+   pubkey; old-shell installs continue receiving releases signed with the old
+   key on the parallel codepath described above.
+
+### Apple notarisation
+
+1. Regenerate the `.p12` (Keychain Access -> export Developer ID Application).
+2. Update `APPLE_CERTIFICATE` + `APPLE_CERTIFICATE_PASSWORD` +
+   `APPLE_SIGNING_IDENTITY` in GitHub repo settings.
+3. `APPLE_ID` + `APPLE_PASSWORD` (app-specific) only need rotation if your
+   Apple ID itself rotates (rare; tied to enrollment, not the cert).
+
+Unlike Tauri signing keys, Apple notarisation cert rotation does NOT require
+shipping a new shell build (the cert that signed/notarised the bundle is
+recorded in the `.app`'s signing chain; macOS Gatekeeper accepts a current
+notarisation at install time -- it does not perform ongoing update
+verification).
+
+> For CI-token rotation (GitHub Actions OIDC, PATs used for `softprops/action-gh-release`,
+> npm provenance tokens, etc.) see repo Settings → Secrets and variables →
+> Actions. CI tokens are independent of the release-signing secrets catalogued
+> above and have their own rotation lifecycles.

@@ -10,7 +10,7 @@
 #
 # Outputs:
 #   <key-path>     -- PRIVATE half; paste into TAURI_SIGNING_PRIVATE_KEY
-#   <key-path>.pub -- PUBLIC half; paste into bundle.updater.pubkey in
+#   <key-path>.pub -- PUBLIC half; paste into plugins.updater.pubkey in
 #                     src-tauri/tauri.conf.json
 #
 # Note: for developer-machine interactive use, run `tauri signer generate`
