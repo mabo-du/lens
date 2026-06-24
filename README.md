@@ -4,7 +4,7 @@ Open-source qualitative data analysis (QDA) for the desktop. Import documents, b
 
 ## Features
 
-- **Document import:** TXT, DOCX (via Mammoth.js), PDF (via pdfplumber sidecar)
+- **Document import:** TXT, DOCX (custom importer via xmldom + jszip), PDF (via pdfplumber sidecar)
 - **Coding workspace:** Three-panel layout — document list, ProseMirror editor with annotation highlights, hierarchical code tree
 - **Closure-table code tree:** Nest codes arbitrarily deep with drag-and-drop reorganization
 - **Full-text search:** FTS5 across documents and memos, with code-scoped filtering
@@ -66,4 +66,10 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system design, data model, a
 
 ## License
 
-To be determined.
+LENS is released under the [MIT License](LICENSE). You are free to use, copy,
+modify, merge, publish, distribute, sublicense, and/or sell copies of the
+source or binaries, provided the copyright notice and permission notice are
+preserved. The above is a summary; the [LICENSE](LICENSE) file is
+authoritative. Third-party components carry their own licences — see
+[Third-Party Notices](THIRD_PARTY_NOTICES.md) for the upstream attribution
+list.
