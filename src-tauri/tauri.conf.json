@@ -5,7 +5,7 @@
   "identifier": "org.heritagetech.lens",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://localhost:57598",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
