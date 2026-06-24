@@ -27,12 +27,12 @@ use roxmltree::{Document, NodeType};
 /// Returns the **raw** extracted text (paragraphs separated by `\n`). The
 /// caller (`documents_import_internal`) is responsible for running the
 /// pipeline-wide `normalise_text` so extraction and normalisation are not
-/// performed twice. Accepts any `AsRef<Path>` so callers can pass either
-/// `&Path` directly or `&PathBuf` / `&String` via deref coercion.
-pub fn extract_text_from_docx<P: AsRef<Path>>(
-    file_path: P,
-) -> Result<String, String> {
-    let bytes = read_file_bytes(file_path.as_ref())?;
+/// performed twice.
+///
+/// Accepted path type is `&Path`; callers holding a `PathBuf` should wrap as
+/// `Path::new(&path_buf)`.
+pub fn extract_text_from_docx(file_path: &Path) -> Result<String, String> {
+    let bytes = read_file_bytes(file_path)?;
     extract_text_from_docx_bytes(&bytes)
 }
 
@@ -188,11 +188,39 @@ fn read_file_bytes(path: &Path) -> Result<Vec<u8>, String> {
     Ok(buf)
 }
 
-// NOTE: `word/document.xml` is read by hard-coded name. DOCX files with
-// revision history enabled store live edits in `document.xml` and earlier
-// revisions in `document2.xml`, `document3.xml`, ... For MVP we accept only
-// the live edit view; revision-only-marker files will yield an "entry not
-// found" error which the import dispatcher surfaces as a normal failure.
+// NOTE: known MVP limitations of this extractor (documented for future
+// readers; none of these drop *text* — `<w:r><w:t>` text is descended into
+// regardless of which container encloses it — but they DO lose *semantic
+// distinctions*):
+//
+// - Revision history: `word/document.xml` is read by hard-coded name. DOCX
+//   files with revision history enabled store live edits in `document.xml`
+//   and earlier revisions in `document2.xml`, `document3.xml`, … Only the
+//   live edit view is read; revision history files are never opened.
+//
+// - Top-level tables: only direct-child `<w:p>` paragraphs of `<w:body>`
+//   are walked. `<w:p>` nested inside `<w:tbl>/<w:tr>/<w:tc>` is inlined
+//   into the body output stream, losing the table row/column structure.
+//
+// - Tracked changes: `<w:ins>` and `<w:del>` text is descended into and
+//   appended to the body stream. Accept/reject semantics are NOT applied;
+//   deletions read as if accepted, insertions read as if regular text.
+//   No `<w:ins>`/`<w:del>` metadata (author, date) survives.
+//
+// - Footnotes / endnotes: `<w:r><w:t>` inside `<w:footnote>` /
+//   `<w:endnote>` is descended into and added to the body stream with no
+//   callout marker. The plan called for separator-appended behaviour; not
+//   implemented in MVP.
+//
+// - Comments: `<w:commentRangeStart>` / `<w:commentRangeEnd>` /
+//   `<w:commentReference>` anchors and `<w:comment>` bodies are inlined
+//   without markers. The body anchor becomes invisible text.
+//
+// These limitations are independent — a single document can hit several at
+// once (e.g. a DOCX with both tracked changes and inline comments loses
+// both signals). The output extract's character offset space approximates
+// the live view but is NOT guaranteed to match either NVivo or ATLAS.ti
+// interpretations of the same source document.
 
 #[cfg(test)]
 mod tests {
