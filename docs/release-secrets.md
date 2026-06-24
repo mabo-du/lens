@@ -45,13 +45,12 @@ per rotation.** The script writes the public key to stdout -- paste that into
   exactly one pubkey per shell build (no fallback key list). **Plan a sunset
   date for the old-shell cohort** before rotating, otherwise that cohort is
   stranded on whatever final release you last signed with the OLD key.
-  Tauri has no built-in upgrade-prompt-for-shell-pubkey mechanism -- sunset
-  is achieved via (a) in-app banner for old-shell users announcing Shell-N is
-  available, (b) attrition, or (c) macOS-side forcing if the Apple notarisation
-  cert expires (forces re-install on next launch). Tauri 2.x does NOT ship a
-  built-in `force_update` / `migration_required` flag for the updater; sunset
-  cannot be enforced from the updater itself -- only from the shell UI or via
-  macOS Gatekeeper pressure.
+  Tauri 2.x has no built-in mechanism for forcing old-shell-to-new-shell
+  migration -- no upgrade prompt for a new pubkey, no `force_update` flag,
+  no `migration_required` hook. Sunset must be driven from the shell UI
+  (in-app banner announcing Shell-N is available), by attrition, or by
+  macOS-side forcing if the Apple notarisation cert expires (forces
+  re-install on next launch via Gatekeeper pressure).
 - **URL-endpoint caveat**: do NOT swap the `Releases/latest.json` URL endpoint
   at the same time as a pubkey rotation. Sequence them.
 - **Rollback**: if a partial rollout fails half-way (signing server error mid
