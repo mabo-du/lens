@@ -33,6 +33,17 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "updater": {
+      "active": true,
+      "dialog": true,
+      "endpoints": [
+        "https://github.com/heritage-tech/lens/releases/latest/download/latest.json"
+      ],
+      "pubkey": "PLACEHOLDER_REPLACE_WITH_OUTPUT_OF_TAURI_SIGNER_GENERATE",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

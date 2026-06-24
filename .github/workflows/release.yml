@@ -75,7 +75,6 @@ jobs:
       - name: Build PDF plumber sidecar
         run: bash scripts/build-sidecar.sh
         shell: bash
-        continue-on-error: true
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@84b9d35b57d620980c95029a8d46db1946808779 # v0
