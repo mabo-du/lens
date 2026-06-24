@@ -31,7 +31,7 @@ import { HelpDialog } from '../settings/HelpDialog';
  *
  * Prompts the user to the GitHub releases page rather than triggering an
  * in-app download flow — that's deliberate: the updater plugin's
- * `update-and-install` flow needs a configured `bundle.updater` with a
+ * `update-and-install` flow needs a configured `plugins.updater` with a
  * real signing pubkey, which the MVP doesn't ship (see
  * `.env.example` + `AGENTS.md` → Release Secrets).
  */

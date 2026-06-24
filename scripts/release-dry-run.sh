@@ -34,7 +34,7 @@ npm run build
 echo "[release-dry-run] step 4/4: build Tauri installer for current host"
 # `--bundles app` produces only the host-appropriate installer (.dmg on Mac,
 # .msi on Windows, .deb/.AppImage on Linux). This exercises the full Tauri
-# bundling pipeline (incl. signing if `bundle.updater.pubkey` is set).
+# bundling pipeline (incl. signing if `plugins.updater.pubkey` is set).
 (cd src-tauri && npx tauri build --bundles app --no-bundle)
 
 echo "[release-dry-run] DONE"
