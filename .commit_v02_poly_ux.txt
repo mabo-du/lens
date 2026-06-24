@@ -1,0 +1,36 @@
+feat(v0.2): polygon-mode UX in ImageViewer (mode toggle + click-to-add-vertex + snap-to-close)
+
+Substantial frontend followup to round-74 v0.2 polygon backend. Rust
+foundation (migration 06, image_polygons IPC, round-trip test, TS IPC
+wrapper) is unchanged from ffcb37e.
+
+This commit lands the **interactive UX** on top of that foundation:
+
+  - Mode-toggle pill at top-left of toolbar (Rectangle | Polygon,
+    data-testid="mode-bbox" / data-testid="mode-polygon"). Default is
+    Rectangle (preserves the bbox drag-to-create). Mode-switch cancels
+    any in-flight draft of the other mode.
+  - Polygon mode UX:
+      - click on stage  -> add vertex at cursor pos
+      - mouse move      -> live preview line from last vertex to cursor
+                            (cursor snaps to v[0] when within 12 px,
+                             once >=3 vertices are placed)
+      - ring highlight  -> snap-to-close visual on v[0]
+      - right-click OR Enter -> commit (imagePolygonsIpc.create after
+                            >=3 vertices validated)
+      - Esc             -> cancel draft
+      - right-click persisted polygon -> delete
+                              (imagePolygonsIpc.delete)
+  - Window keydown handler (Esc/Enter) is mounted only while in
+    polygon mode, bails when target is INPUT/TEXTAREA/contentEditable,
+    cleans up on unmount.
+  - Persisted polygons render as Konva <Line closed> with code-colour
+    stroke and 0x33 (20%) alpha fill; code-name label at v[0].
+  - Stage onContextMenu CRITICAL filter: e.target === e.target.getStage()
+    so right-clicking a persisted polygon does NOT double-fire delete
+    + commit in one gesture (Konva bubbles per-shape -> Stage).
+
+CHANGELOG.md [Unreleased] v0.2 entry added documenting the UX.
+
+Gates: tsc 0 / cargo build 0 / cargo test 0 (57/57) / vitest 0
+(14/14) / vite build 0; code-reviewer shipped it.

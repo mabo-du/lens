@@ -16,7 +16,7 @@ import { test, expect, type Page } from '@playwright/test';
  * but is fragile; an explicit absolute URL is bulletproof and matches
  * the round-77 defensive config in playwright.config.ts.)
  */
-const FIXTURE_URL = 'http://localhost:57599/';
+const FIXTURE_URL = 'http://127.0.0.1:57599/';
 
 async function gotoFixture(page: Page) {
   await page.goto(FIXTURE_URL);

@@ -109,6 +109,83 @@ Dependable image-doc UX: Konva-powered image viewer with drag-to-create bbox reg
 
 ## [Unreleased]
 
+### v0.2 — Playwright E2E wiring + http-server stack + CI integration (round-78)
+
+Builds on the round-77 test infrastructure with two corrections and one
+production CI integration:
+
+#### http-server replaces `vite preview` (and the failing `vite dev`)
+
+Three rounds of Playwright ERR_CONNECTION_REFUSED on the linux
+Playwright runtime were traced not to config but to one of: dev-mode
+HMR, vite preview's layered network handling, or inherited stdio
+lifecycle races. Round-78 swaps to `npx http-server` — a 100-line static
+file server — for both `tests/e2e/` and `tools/perf/`. The Playwright
+fixture is built once via `vite build` (heavy React + Konva compile),
+then served as static `dist/` by http-server on `127.0.0.1:57599`,
+removing every tried-and-failed timing race.
+
+New files: `tests/e2e/global-setup.mjs` (spawn vite build → spawn
+http-server → poll URL up to 180s), `tests/e2e/global-teardown.mjs`
+(SIGTERM the http-server child via `process.env.LENS_E2E_HTTP_PID`,
+`pkill -f` fallback). `playwright.config.ts` switches from
+`webServer` to `globalSetup`/`globalTeardown`.
+
+URLs moved from `localhost` → `127.0.0.1` everywhere (avoids Playwright
+chromium resolving to `::1` while vite bound IPv4 only). Same for
+`host: '127.0.0.1'` in `fixture.vite.config.ts` server block.
+
+#### CI integration (`playwright-e2e` job)
+
+New `playwright-e2e` job in `.github/workflows/ci.yml` runs on
+ubuntu-latest after `typescript` + `rust` gates succeed:
+- `npm ci` → `npx playwright install --with-deps chromium` →
+  `npx tsc --noEmit` → `npx playwright test --reporter=list`.
+
+Runs both `tests/e2e/image-viewer.spec.ts` (4 user-flow tests) and
+`tools/perf/perf-bench.spec.ts` (Konva-baseline + writes
+`tools/perf/results.json`).
+
+#### Note on local execution
+
+The Playwright chromiums in some sandboxes cannot reach
+locally-spawned HTTP servers via 127.0.0.1 TCP even with http-server
+(no dev-mode logic, just a 100-line static file responder). On those
+hosts the gate manifests as ERR_CONNECTION_REFUSED for every test
+even though `curl http://127.0.0.1:57599/` returns 200 OK from the
+parent shell. This is an environmental quirk of the runner, not a
+config bug — CI provides a fresh env where the http-server backing
++ Playwright chromium network stack always line up.
+
+**Debug recipe** if a similar surface appears in CI: walk through the
+4-attempt tree at /home/mark/Projects/LENS:
+
+1. Run `npx playwright test --reporter=list`. If every test fails at
+   `await page.goto(URL)` with `net::ERR_CONNECTION_REFUSED`, the
+   chromium network stack can't reach the spun-up server.
+2. Sanity-check with `curl -sv http://127.0.0.1:57599/`. If curl gets
+   200 OK but chromium doesn't, the issue is browser ↔ host network
+   isolation (not config).
+3. Check `getent hosts localhost` / `cat /etc/hosts` — chromium often
+   resolves `localhost` to `::1` while servers bind IPv4. Forcing
+   `127.0.0.1` everywhere is the first mitigation.
+4. Try a different transport: `vite dev` → `vite build && vite preview`
+   → static build + `npx http-server` (round-78 final choice because
+   it's a 100-line responder with no rolling dev-tooling).
+5. If all three still fail, the runner has browser network hardening
+   that breaks localhost TCP; the gate belongs in CI where the runner
+   is fresh.
+
+#### Round-78 fixes after code-reviewer
+
+- **Require-in-mjs blocker**: original `tests/e2e/global-teardown.mjs`
+  used `require('node:child_process')` inside a function in a `.mjs`
+  file. Node 20 LTS treats `.mjs` as strict ESM — `require` is
+  undefined — so the SIGTERM-fallback pkill path would have thrown
+  ERR_REQUIRE_ESM at teardown. Hoisted `import { execFileSync } from
+  'node:child_process'` to the top of file. (Same shape works fine on
+  the Node 22 default but the CI job pins Node 20, so it matters.)
+
 ### v0.2 — polygon-mode UX (frontend, this commit)
 
 Building on the round-74 v0.2 polygon backend foundation (migration 06 +

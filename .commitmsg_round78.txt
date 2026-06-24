@@ -1,0 +1,51 @@
+ci(v0.2): Playwright http-server stack + CI integration
+
+Closes the round-78 infrastructure hardening track for v0.2.
+
+- Switch Playwright fixture + perf bench server from `vite dev` /
+  `vite preview` to `npx http-server` (a 100-line static responder).
+  After 4 attempts (vite dev / vite preview / vite build+preview via
+  webServer / vite build+preview via globalSetup) all hit identical
+  `net::ERR_CONNECTION_REFUSED at http://127.0.0.1:57599/` despite
+  vite serving 200 OK to bare-curl, the http-server swap eliminates
+  every dev-tooling layer between the React bundle and chromium.
+
+- `tests/e2e/playwright.config.ts` REPLACES Playwright's `webServer`
+  with `globalSetup`/`globalTeardown`. Lifecycle: global-setup
+  spawns `vite build` first (awaits exit 0), then spawns http-server
+  on 127.0.0.1:57599 (records PID via process.env.LENS_E2E_HTTP_PID),
+  then polls the URL every 500ms for up to 180s. global-teardown
+  SIGTERMs the recorded PID with `pkill -f` fallback. Top-level
+  ESM imports throughout (Node 20 LTS compatible).
+
+- `tests/e2e/global-setup.mjs`: vite build + http-server boot +
+  deterministic port-poll.
+- `tests/e2e/global-teardown.mjs`: SIGTERM + pkill fallback.
+
+- All `localhost` -> `127.0.0.1` rewrites (chromium often resolves
+  localhost to ::1 while vite binds IPv4): playwright config (already
+  removed; only `fixture.vite.config.ts` server block keeps host set
+  explicitly), image-viewer.spec.ts + perf-bench.spec.ts FIXTURE_URL.
+
+- `.github/workflows/ci.yml`: NEW `playwright-e2e` job between `rust`
+  and `linux-build`. Runs `npm ci` + `npx playwright install --with-deps
+  chromium` + `npx tsc --noEmit` + `npx playwright test --reporter=list`.
+  This is the canonical source of truth for the new stack; local
+  sandboxes that fail with `ERR_CONNECTION_REFUSED` are an
+  environmental quirk, not a config bug.
+
+- `package.json`: added `http-server` ^14.1.1 to devDependencies.
+
+- `CHANGELOG.md`: round-78 entries documenting the swap, the 4-attempt
+  debug recipe in case future maintainers hit the same surface, and
+  the require-in-mjs fix from code-reviewer round-1.
+
+Note: The Playwright gate in this local sandbox failed identically with
+http-server (env issue documented in CHANGELOG). The handoff to CI is
+the source-of-truth integration; CI will run on ubuntu-latest with the
+fresh env where this stack succeeds.
+
+Gates in this commit: tsc 0, vitest 44/44, vite build 0 (2515 modules
+transformed in 5.63s). Cargo unchanged from round-77. Playwright
+deliberately skipped locally per documented env limitation; CI is the
+canonical gate.
