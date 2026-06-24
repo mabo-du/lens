@@ -32,10 +32,27 @@ echo "[release-dry-run] step 3/4: build front-end"
 npm run build
 
 echo "[release-dry-run] step 4/4: build Tauri installer for current host"
-# `--bundles app` produces only the host-appropriate installer (.dmg on Mac,
-# .msi on Windows, .deb/.AppImage on Linux). This exercises the full Tauri
-# bundling pipeline (incl. signing if `plugins.updater.pubkey` is set).
-(cd src-tauri && npx tauri build --bundles app --no-bundle)
+# Tauri 2.x --bundles accepts platform-specific target lists. Passing an
+# unknown bundle identifier ("app") fails with `invalid value 'app' for
+# '--bundles'` at parse time. Pick the host-appropriate targets so the
+# bundling code path (incl. signing if `plugins.updater.pubkey` is set)
+# actually exercises the right targets. Pair with --no-bundle so we
+# skip writing installer artefacts (this is a dry-run, not a real build).
+# Keep MSYS* in the glob: standalone MSYS2 installs (installed via
+# msys2.org installer, no MINGW overlay) emit `MSYS_NT-...` from
+# `uname -s`, which `MINGW*` does NOT match. Two MSYS-family bundles
+# coexist; keeping both globs is harmless redundancy on overlapped hosts.
+case "$(uname -s 2>/dev/null)" in
+  Darwin|darwin)      BUNDLES="app,dmg" ;;
+  Linux|linux)        BUNDLES="deb,rpm,appimage" ;;
+  CYGWIN*|MINGW*|MSYS*) BUNDLES="msi,nsis" ;;
+  *)
+    echo "[release-dry-run] unsupported host: $(uname -s); skipping step 4" >&2
+    ;;
+esac
+if [[ -n "${BUNDLES:-}" ]]; then
+  (cd src-tauri && npx tauri build --bundles "$BUNDLES" --no-bundle)
+fi
 
 echo "[release-dry-run] DONE"
 echo "[release-dry-run] inspect artefacts under src-tauri/target/release/bundle/"
