@@ -43,8 +43,8 @@ test.describe('Search', () => {
     // Results should appear (debounced 200ms).
     await expect(page.getByText('Documents')).toBeVisible({ timeout: 5000 });
 
-    // The document title should appear as a result.
-    await expect(page.getByText('Test Interview Transcript')).toBeVisible();
+    // The document title should appear as a result button.
+    await expect(page.getByRole('button', { name: /Test Interview Transcript/ })).toBeVisible();
 
     // The snippet should contain the highlighted match.
     await expect(page.locator('mark')).toBeVisible();
