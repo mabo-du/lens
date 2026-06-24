@@ -224,6 +224,78 @@ Snap-distance boundary cases covered by the tests:
 - MAX_POLYGON_VERTICES = 64 boundary (64 → commit, 65 → reject)
 - MIN_POLYGON_VERTICES = 3 boundary (2 → reject, 3 → commit)
 
+### v0.2 — Playwright E2E + Konva perf baseline (round-77, this commit)
+
+Two infrastructure tracks to close the [Unreleased] v0.2 items:
+a real-browser E2E suite and a Konva draw-time baseline.
+
+#### Playwright E2E suite (data-testid hooks live)
+
+A new `tests/e2e/` directory hosts a Playwright suite that drives the
+actual production `ImageViewer.tsx` React component via a small
+standalone fixture (no Tauri runtime required):
+
+```
+tests/e2e/
+  fixture.vite.config.ts      # separate vite config on port 57599
+  fixture/
+    index.html
+    src/main.tsx              # bootstraps window.__TAURI_INTERNALS__
+                              # shim + useProjectStore + ImageViewer mount
+  playwright.config.ts
+  image-viewer.spec.ts        # 4 tests: mode toggle, 4-vertex commit,
+                              # action dialog, Edit Memo flow
+  README.md                   # runner docs
+```
+
+The fixture's `main.tsx` synchronously sets
+`window.__TAURI_INTERNALS__ = { invoke }` before importing
+`@tauri-apps/api/core`, so all production IPC paths (`imagePolygonsIpc
+.create`, `memosIpc.save`, `document_get_asset_base64`, etc.) resolve
+against an in-memory fixture store. The store is exposed via
+`window.__LENS_TEST__ = { invocations, reset, fixture }` for Playwright
+assertions.
+
+`image-viewer.spec.ts` covers the four data-testid hooks added in
+rounds 75-76:
+- `mode-bbox` / `mode-polygon` (mode toggle pill)
+- `region-action-edit-memo` / `region-action-delete` (shape action Dialog)
+- Polygon commit IPC payload shape (4 vertices in [0, 1]²)
+- `RegionMemoDialog` opens with the correct codeName via Edit Memo...
+
+Run with:
+```
+npx playwright test tests/e2e/image-viewer.spec.ts
+```
+
+#### Konva draw-time perf baseline
+
+`tools/perf/` directory with a Playwright-driven benchmark that mounts
+a Konva Stage on synthetic mid-grey PNGs at three intrinsic sizes
+(256, 1024, 2048) and records `performance.now()`-timed `layer.draw()`
+cycles for both bbox and polygon operations over `N = 200`
+iterations per cell. Results are written to
+`tools/perf/results.json` after each Playwright run.
+
+Methodology + interpretation + sample thresholds are documented in
+`docs/research-papers/v0.2-konva-perf-baseline.md`; the
+**custom-canvas comparison** is explicitly deferred to v0.3 since this
+round establishes the Konva baseline numbers needed as a control.
+
+Run with:
+```
+npx playwright test tools/perf/perf-bench.spec.ts
+cat tools/perf/results.json
+```
+
+#### Maintainer action item
+
+The release matrix is still failing — `github.com/mabo-du/lens` needs
+an `admin:org`-scoped maintainer to inspect + lift the org-level
+third-party-action blocklist on `Settings → Actions → General → Allow
+specified actions`. Steps are written to `.gh_admin_org_setup.md` in
+the repository root.
+
 ### Planned for v0.2 (remaining)
-- Konva vs custom-canvas performance benchmarking under WSL/Raspberry Pi 4
 - Apple-signing release.yml matrix verification + GA cut
+- Custom-canvas comparison vs the round-77 Konva baseline (v0.3 track)
