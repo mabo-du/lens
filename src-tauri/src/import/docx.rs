@@ -189,38 +189,41 @@ fn read_file_bytes(path: &Path) -> Result<Vec<u8>, String> {
 }
 
 // NOTE: known MVP limitations of this extractor (documented for future
-// readers; none of these drop *text* — `<w:r><w:t>` text is descended into
-// regardless of which container encloses it — but they DO lose *semantic
-// distinctions*):
+// readers; some drop *text entirely*, others lose *semantic distinction*):
 //
 // - Revision history: `word/document.xml` is read by hard-coded name. DOCX
 //   files with revision history enabled store live edits in `document.xml`
 //   and earlier revisions in `document2.xml`, `document3.xml`, … Only the
-//   live edit view is read; revision history files are never opened.
+//   live edit view is read.
 //
 // - Top-level tables: only direct-child `<w:p>` paragraphs of `<w:body>`
 //   are walked. `<w:p>` nested inside `<w:tbl>/<w:tr>/<w:tc>` is inlined
 //   into the body output stream, losing the table row/column structure.
 //
-// - Tracked changes: `<w:ins>` and `<w:del>` text is descended into and
-//   appended to the body stream. Accept/reject semantics are NOT applied;
-//   deletions read as if accepted, insertions read as if regular text.
-//   No `<w:ins>`/`<w:del>` metadata (author, date) survives.
+// - Tracked changes: `<w:ins>` and `<w:del>` (which live INSIDE paragraphs
+//   in `document.xml`) are descended into and their inner `<w:r><w:t>` is
+//   appended. Accept/reject semantics are NOT applied — `del` text reads
+//   as if accepted, `ins` reads as if regular text. Author/date metadata
+//   from `<w:ins>` / `<w:del>` does NOT survive.
 //
-// - Footnotes / endnotes: `<w:r><w:t>` inside `<w:footnote>` /
-//   `<w:endnote>` is descended into and added to the body stream with no
-//   callout marker. The plan called for separator-appended behaviour; not
-//   implemented in MVP.
+// - Footnotes: `word/document.xml` is the only file opened. `<w:footnote>`
+//   bodies live in `word/footnotes.xml` which is NEVER read. Footnote text
+//   is **silently dropped from the output** even though it would be reached
+//   by the descendant walker. Endnotes: same pattern via `endnotes.xml`.
 //
-// - Comments: `<w:commentRangeStart>` / `<w:commentRangeEnd>` /
-//   `<w:commentReference>` anchors and `<w:comment>` bodies are inlined
-//   without markers. The body anchor becomes invisible text.
+// - Comments: body anchors `<w:commentRangeStart>` / `<w:commentRangeEnd>`
+//   / `<w:commentReference>` (in `document.xml`) are visible —
+//   `<w:commentRangeStart>` carries text attributes that may produce
+//   empty runs and so are silently inlined. The comment bodies live in
+//   `word/comments.xml` which is **never read**, so authored comment text
+//   is silently dropped.
 //
-// These limitations are independent — a single document can hit several at
-// once (e.g. a DOCX with both tracked changes and inline comments loses
-// both signals). The output extract's character offset space approximates
-// the live view but is NOT guaranteed to match either NVivo or ATLAS.ti
-// interpretations of the same source document.
+// Top-level tables and tracked changes are *partial-loss* semantics (the
+// text is reached but structure is lost). Footnotes / endnotes / comment
+// bodies are *total-loss* semantics (the text is never read). A single
+// document can hit several of these at once. The output extract's
+// character offset space approximates the live view but is NOT guaranteed
+// to match NVivo or ATLAS.ti interpretations of the same source.
 
 #[cfg(test)]
 mod tests {
