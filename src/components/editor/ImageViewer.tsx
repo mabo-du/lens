@@ -16,25 +16,56 @@
  *     cancelling the in-flight draft.
  *
  * Both modes share the same code-picker toolbar (single active code for
- * the next create), the right-click polygon/bbox delete affordance on
- * persisted shapes, and the load-on-mount-plus-refresh IPC pattern.
+ * the next create) and the load-on-mount-plus-refresh IPC pattern.
  *
- * Out of scope for this slice: memo-on-region binding; performance
+ * Shape actions (right-click on a persisted region OR polygon) open a
+ * small action Dialog with two buttons:
+ *
+ *   - **Edit Memo...** — opens `RegionMemoDialog`, the same memos backend
+ *     used by text annotations (the memo table's `linked_selection_id`
+ *     column already supports any selection type, so no schema work).
+ *
+ *   - **Delete** — deletes the region/polygon via the existing IPC.
+ *
+ * Shapes with an attached memo also display a small badge next to the
+ * code-name label so the researcher can see at a glance which regions
+ * have a note attached.
+ *
+ * Out of scope for this slice: Konva vs custom-canvas performance
  * benchmarking under WSL / Raspberry Pi 4.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Stage, Layer, Image as KonvaImage, Rect, Line, Circle, Text } from 'react-konva';
 import type Konva from 'konva';
+import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 import { documentsIpc, type DocumentRecord, type DocumentAsset } from '@/ipc/documents';
 import { imageRegionsIpc, type ImageRegionRecord } from '@/ipc/image-regions';
 import { imagePolygonsIpc, type ImagePolygonRecord } from '@/ipc/image-polygons';
+import { memosIpc } from '@/ipc/memos';
 import { type Code } from '@/ipc/codes';
 import { useProjectStore } from '@/store/projectStore';
-import { toast } from 'sonner';
+import { RegionMemoDialog } from '@/components/memos/RegionMemoDialog';
+import {
+  isSnapToClose,
+  livePreviewPoints,
+  draftLinePoints,
+  draftShouldClose,
+  modeSwitchReset,
+  MAX_POLYGON_VERTICES,
+  type Vertex,
+} from './polygonState';
 
 type Mode = 'bbox' | 'polygon';
+type ShapeKind = 'region' | 'polygon';
 
 interface DraftRect {
   startX: number;
@@ -45,17 +76,17 @@ interface DraftRect {
   h: number;
 }
 
-interface Vertex {
-  x: number; // pixel space
-  y: number;
+interface PendingShapeAction {
+  selectionId: string;
+  kind: ShapeKind;
+  codeName: string;
 }
 
 const MIN_DRAG_PX = 4; // suppress accidental drag-create on click (bbox mode)
-const SNAP_RADIUS_PX = 12; // snap-to-close distance from vertex 0 (polygon mode)
-const MIN_POLYGON_VERTICES = 3;
 
 export function ImageViewer({ document }: { document: DocumentRecord }) {
   const codes = useProjectStore(s => s.codes);
+  const activeProject = useProjectStore(s => s.activeProject);
   const {
     intrinsicW,
     intrinsicH,
@@ -76,6 +107,14 @@ export function ImageViewer({ document }: { document: DocumentRecord }) {
   const [polygons, setPolygons] = useState<ImagePolygonRecord[]>([]);
   const [draftVertices, setDraftVertices] = useState<Vertex[]>([]);
   const [cursorPos, setCursorPos] = useState<Vertex | null>(null);
+
+  // Action / memo state.
+  const [pendingShapeAction, setPendingShapeAction] = useState<PendingShapeAction | null>(null);
+  const [editingSelectionId, setEditingSelectionId] = useState<string | null>(null);
+  // Memo-presence badge: a Set of selectionIds that have a non-empty memo
+  // body in this project. Loaded alongside region/polygon freshness and
+  // re-loaded after `RegionMemoDialog` closes.
+  const [memoExistsBySelectionId, setMemoExistsBySelectionId] = useState<Set<string>>(() => new Set());
 
   // Shared state.
   const [mode, setMode] = useState<Mode>('bbox');
@@ -105,7 +144,7 @@ export function ImageViewer({ document }: { document: DocumentRecord }) {
     return () => { cancelled = true; };
   }, [documentId, title]);
 
-  // 2. Refresh lists whenever the document changes + after a create/delete.
+  // 2. Refresh regions + polygons whenever the document changes.
   const refreshRegions = useCallback(async () => {
     try {
       const list = await imageRegionsIpc.listByDocument(documentId);
@@ -124,12 +163,48 @@ export function ImageViewer({ document }: { document: DocumentRecord }) {
     }
   }, [documentId]);
 
-  useEffect(() => {
-    refreshRegions();
-    refreshPolygons();
-  }, [refreshRegions, refreshPolygons]);
+  // 3. Memo-presence: query the project's memo list and build a Set of
+  //    selectionIds with a non-empty body. Cheap because memosIpc.listByProject
+  //    pulls the full project table; in practice projects have tens to low
+  //    hundreds of memos at MVP scale.
+  const refreshMemoExistence = useCallback(async () => {
+    if (!activeProject) {
+      setMemoExistsBySelectionId(new Set());
+      return;
+    }
+    try {
+      const all = await memosIpc.listByProject(activeProject.id);
+      const next = new Set<string>();
+      for (const m of all) {
+        if (m.linkedSelectionId && m.body.trim().length > 0) {
+          next.add(m.linkedSelectionId);
+        }
+      }
+      setMemoExistsBySelectionId(next);
+    } catch (e) {
+      // Don't toast here — memo-presence is a soft signal. Surface only in console.
+      console.error('Failed to load memo existence list:', e);
+    }
+  }, [activeProject]);
 
-  // 3. Build a code lookup for colour rendering.
+  useEffect(() => {
+    void refreshRegions();
+    void refreshPolygons();
+    void refreshMemoExistence();
+  }, [refreshRegions, refreshPolygons, refreshMemoExistence]);
+
+  // 4. After the memo dialog closes (selectionId transitions non-null -> null)
+  //    the memo body may have been added or updated. Re-check memo-presence so
+  //    the badge reflects the change without waiting for a region refresh.
+  const prevEditingRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (prevEditingRef.current && !editingSelectionId) {
+      void refreshMemoExistence();
+    }
+    prevEditingRef.current = editingSelectionId;
+  }, [editingSelectionId, refreshMemoExistence]);
+
+  // 5. Build a code lookup for colour rendering.
   const codeById = useMemo(() => {
     const m = new Map<string, Code>();
     for (const c of codes) m.set(c.id, c);
@@ -145,7 +220,7 @@ export function ImageViewer({ document }: { document: DocumentRecord }) {
     return { x: pos.x, y: pos.y };
   };
 
-  // 4a. Bbox-mode pointer handlers (drag-to-create).
+  // 6a. Bbox-mode pointer handlers (drag-to-create).
   const handleBboxPointerDown = (pos: Vertex) => {
     setDraftRect({ startX: pos.x, startY: pos.y, x: pos.x, y: pos.y, w: 0, h: 0 });
   };
@@ -185,10 +260,16 @@ export function ImageViewer({ document }: { document: DocumentRecord }) {
     }
   };
 
-  // 4b. Polygon-mode pointer handlers (click-to-add-vertex).
+  // 6b. Polygon-mode pointer handlers (click-to-add-vertex).
   //   - Move: update cursor pos for live preview; no vertex added.
   //   - Down: push vertex at cursor pos (no drag concept in polygon mode).
+  //   - Upper bound enforced client-side (matches Rust validator's MAX_POLYGON_VERTICES)
+  //     so a researcher can't click past 64 before the backend rejects.
   const handlePolygonPointerDown = (pos: Vertex) => {
+    if (draftVertices.length >= MAX_POLYGON_VERTICES) {
+      toast.error(`Polygons are limited to ${MAX_POLYGON_VERTICES} vertices.`);
+      return;
+    }
     setDraftVertices(prev => [...prev, pos]);
     setCursorPos(pos);
   };
@@ -201,13 +282,13 @@ export function ImageViewer({ document }: { document: DocumentRecord }) {
     // Polygon mode does not consume pointerup — vertex placement happens on pointerdown.
   };
 
-  // 5. Stage-level onContextMenu dispatch.
+  // 7. Stage-level onContextMenu dispatch.
   //   - bbox mode: Stage ctxmenu is unused (per-region ctxmenu still works).
-  //   - polygon mode: commit the in-flight draft (subject to vertex-count validation).
+  //   - polygon mode: commit the in-flight draft on free-area right-click.
   // CRITICAL: in polygon mode the right-click target might be a *persisted*
-  // polygon Line — its per-shape `onContextMenu` already runs (delete).
-  // Konva bubbles, so without `e.target === stage` we'd accidentally
-  // delete a polygon AND commit the draft in one gesture. Filter so the
+  // polygon Line. Its per-shape `onContextMenu` already ran (opens the
+  // shape-action Dialog). Konva bubbles, so without `e.target === stage`
+  // we'd accidentally delete-and-commit in one gesture. Filter so the
   // commit path only fires for free-area right-clicks.
   const handleStageContextMenu = (e: Konva.KonvaEventObject<PointerEvent>) => {
     if (mode !== 'polygon') return;
@@ -217,11 +298,11 @@ export function ImageViewer({ document }: { document: DocumentRecord }) {
     void commitPolygon();
   };
 
-  // 6. Commit a polygon (called on right-click in polygon mode OR Enter key).
+  // 8. Commit a polygon (called on free-area right-click OR Enter key).
   const commitPolygon = async () => {
     if (mode !== 'polygon') return;
-    if (draftVertices.length < MIN_POLYGON_VERTICES) {
-      toast.error(`Polygons need at least ${MIN_POLYGON_VERTICES} vertices — add more before closing.`);
+    if (!canCommitPolygonDraft()) {
+      toast.error('Polygons need at least 3 vertices — add more before closing.');
       return;
     }
     if (!selectedCodeId || intrinsicWNum <= 0 || intrinsicHNum <= 0) {
@@ -250,7 +331,10 @@ export function ImageViewer({ document }: { document: DocumentRecord }) {
     }
   };
 
-  // 7. Cancel the in-flight draft (Esc).
+  // Local commit guard wrapper (uses polygonState's `draftShouldClose`).
+  const canCommitPolygonDraft = (): boolean => draftShouldClose(draftVertices);
+
+  // 9. Cancel the in-flight draft (Esc).
   const cancelPolygonDraft = () => {
     if (mode !== 'polygon') return;
     if (draftVertices.length === 0) return;
@@ -259,13 +343,10 @@ export function ImageViewer({ document }: { document: DocumentRecord }) {
     toast.info('Polygon draft cancelled.');
   };
 
-  // 8. Window-level Esc / Enter handlers.
-  //   - Stage absorbs pointer events but not keyboard, and ProseMirror
-  //     not mounted for image documents, so the global listener is safe.
+  // 10. Window-level Esc / Enter handlers.
   useEffect(() => {
     if (mode !== 'polygon') return;
     const onKey = (ev: KeyboardEvent) => {
-      // Don't swallow keys while the user is typing in another input elsewhere.
       const target = ev.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
         return;
@@ -283,7 +364,7 @@ export function ImageViewer({ document }: { document: DocumentRecord }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, draftVertices.length, selectedCodeId, intrinsicWNum, intrinsicHNum, documentId]);
 
-  // 9. Stage pointer dispatcher.
+  // 11. Stage pointer dispatcher.
   const handlePointerDown = (e: Konva.KonvaEventObject<PointerEvent>) => {
     if (!selectedCodeId) {
       toast.error('Pick a code from the toolbar before drawing a region.');
@@ -316,79 +397,89 @@ export function ImageViewer({ document }: { document: DocumentRecord }) {
     }
   };
 
-  // 10. Mode switching cancels any in-flight draft of the other mode.
+  // 12. Mode switching cancels any in-flight draft of the other mode,
+  //     using `modeSwitchReset()` as the single source of truth for the
+  //     reset shape (also exported + unit-tested in polygonState.ts).
   const handleModeChange = (next: Mode) => {
     if (next === mode) return;
     setMode(next);
-    setDraftRect(null);
-    setDraftVertices([]);
-    setCursorPos(null);
+    const r = modeSwitchReset();
+    setDraftRect(r.draftRect);
+    setDraftVertices(r.draftVertices);
+    setCursorPos(r.cursorPos);
   };
 
-  // 11. Right-click delete affordances (per-shape).
-  const handleRegionContextMenu = async (regionId: string) => {
+  // 13. Right-click on a shape opens the action Dialog (Memo... / Delete).
+  //     (Replaces the previous direct-delete path.)
+  const openShapeAction = (selectionId: string, kind: ShapeKind, codeName: string) => {
+    setPendingShapeAction({ selectionId, kind, codeName });
+  };
+
+  // 14. Action Dialog -> "Edit Memo..." button: cache selectionId, swap dialogs.
+  const handleEditMemoFromAction = () => {
+    if (!pendingShapeAction) return;
+    const { selectionId } = pendingShapeAction;
+    setPendingShapeAction(null);
+    setEditingSelectionId(selectionId);
+  };
+
+  // 15. Action Dialog -> "Delete" button: dispatch IPC + refresh.
+  const handleDeleteFromAction = async () => {
+    const pa = pendingShapeAction;
+    if (!pa) return;
+    setPendingShapeAction(null);
     try {
-      await imageRegionsIpc.delete(regionId);
-      await refreshRegions();
+      if (pa.kind === 'region') {
+        await imageRegionsIpc.delete(pa.selectionId);
+        await refreshRegions();
+      } else {
+        await imagePolygonsIpc.delete(pa.selectionId);
+        await refreshPolygons();
+      }
+      // Memo-presence refresh: a deleted memo (FK CASCADE on selection)
+      // means the badge should disappear for this selection.
+      await refreshMemoExistence();
     } catch (e) {
-      toast.error(`Failed to delete region: ${String(e)}`);
+      toast.error(`Failed to delete ${pa.kind}: ${String(e)}`);
     }
   };
 
-  const handlePolygonContextMenu = async (polygonId: string) => {
-    try {
-      await imagePolygonsIpc.delete(polygonId);
-      await refreshPolygons();
-    } catch (e) {
-      toast.error(`Failed to delete polygon: ${String(e)}`);
-    }
-  };
-
-  // 12. Polygon's active code colour (or fallback) for stroke / fill.
+  // 16. Polygon's active code colour (or fallback) for stroke / fill.
   const activeCodeColor = (codeById.get(selectedCodeId ?? '')?.color) ?? '#6366f1';
 
-  // 13. Snap-to-close math.
-  //   - Active when ≥ 3 vertices already placed AND cursor within SNAP_RADIUS_PX of vertex 0.
-  //   - Effective cursor pos used by the live preview "snaps" to vertex 0
-  //     (line stretches to v[0] rather than floating a few pixels away).
-  const snapActive = useMemo(() => {
-    if (mode !== 'polygon') return false;
-    if (draftVertices.length < MIN_POLYGON_VERTICES) return false;
-    if (!cursorPos) return false;
-    const v0 = draftVertices[0];
-    const dx = cursorPos.x - v0.x;
-    const dy = cursorPos.y - v0.y;
-    return dx * dx + dy * dy <= SNAP_RADIUS_PX * SNAP_RADIUS_PX;
-  }, [mode, draftVertices, cursorPos]);
-
-  const effectiveCursor = useMemo<Vertex | null>(() => {
-    if (mode !== 'polygon') return null;
-    if (!cursorPos) return null;
-    if (snapActive) return draftVertices[0] ?? cursorPos;
-    return cursorPos;
-  }, [mode, cursorPos, snapActive, draftVertices]);
-
-  // 14. Flatten draft vertices + effective cursor for the live preview Line `points` array.
-  const livePreviewPoints = useMemo<number[] | null>(() => {
-    if (mode !== 'polygon') return null;
-    if (draftVertices.length === 0) return null;
-    if (!effectiveCursor) return null;
-    const last = draftVertices[draftVertices.length - 1];
-    return [last.x, last.y, effectiveCursor.x, effectiveCursor.y];
-  }, [mode, draftVertices, effectiveCursor]);
-
-  // 15. Draft polygon outline points (closed, low-alpha fill).
-  const draftLinePoints = useMemo<number[] | null>(() => {
-    if (mode !== 'polygon') return null;
-    if (draftVertices.length < 2) return null;
-    return draftVertices.flatMap(v => [v.x, v.y]);
-  }, [mode, draftVertices]);
+  // 17. Snap-to-close + live-preview / draft-line points (delegated to
+  //     polygonState for unit-test coverage). The helpers internally
+  //     compute the snapped cursor; we only need the booleans + flat
+  //     point arrays here.
+  const snapActive = useMemo(
+    () => isSnapToClose(draftVertices, cursorPos),
+    [draftVertices, cursorPos],
+  );
+  const livePreviewPts = useMemo<number[] | null>(
+    () => livePreviewPoints(draftVertices, cursorPos),
+    [draftVertices, cursorPos],
+  );
+  const draftPts = useMemo<number[] | null>(
+    () => draftLinePoints(draftVertices),
+    [draftVertices],
+  );
 
   // Help text per mode.
   const helpText = mode === 'bbox'
-    ? 'Drag on the image to create a region · Right-click a region to delete'
-    : 'Click to add vertex · Right-click or Enter to close · Esc to cancel · ' +
+    ? 'Drag on the image to create a region · Right-click a region for actions'
+    : 'Click to add vertex · Right-click empty area or Enter to close · ' +
+      'Esc to cancel · Right-click a polygon for actions · ' +
       '(snap-to-close within 12 px of vertex 0)';
+
+  // Memo-dialog target: codeName of the selection being edited.
+  const editingCodeName = useMemo(() => {
+    if (!editingSelectionId) return '';
+    const region = regions.find(r => r.id === editingSelectionId);
+    if (region) return codeById.get(region.codeId)?.name ?? '(code)';
+    const poly = polygons.find(p => p.id === editingSelectionId);
+    if (poly) return codeById.get(poly.codeId)?.name ?? '(code)';
+    return '(code)';
+  }, [editingSelectionId, regions, polygons, codeById]);
 
   return (
     <div className="flex flex-col h-full bg-white">
@@ -460,7 +551,7 @@ export function ImageViewer({ document }: { document: DocumentRecord }) {
         </div>
       </div>
 
-      <div className="flex-1 flex items-center justify-center bg-slate-50 overflow-auto">
+      <div className="flex-1 flex items-center justify-center bg-slate-50 overflow-auto relative">
         {intrinsicWNum <= 0 || intrinsicHNum <= 0 ? (
           <p className="text-slate-500">Image has no intrinsic dimensions on file.</p>
         ) : !image ? (
@@ -496,18 +587,19 @@ export function ImageViewer({ document }: { document: DocumentRecord }) {
                   dash={[6, 4]}
                   onContextMenu={(e) => {
                     e.evt.preventDefault();
-                    handleRegionContextMenu(r.id);
+                    openShapeAction(r.id, 'region', codeById.get(r.codeId)?.name ?? '(code)');
                   }}
                 />
               ))}
               {regions.map(r => {
                 const code = codeById.get(r.codeId);
+                const hasMemo = memoExistsBySelectionId.has(r.id);
                 return (
                   <Text
                     key={`label-${r.id}`}
                     x={r.bboxLeft * intrinsicWNum + 4}
                     y={r.bboxTop * intrinsicHNum - 18}
-                    text={code?.name ?? '(code)'}
+                    text={hasMemo ? `${code?.name ?? '(code)'} •` : (code?.name ?? '(code)')}
                     fontSize={12}
                     fill="#fff"
                     padding={2}
@@ -533,7 +625,7 @@ export function ImageViewer({ document }: { document: DocumentRecord }) {
                     fill={`${color}33` /* 0x33 ≈ 20 % alpha */}
                     onContextMenu={(e) => {
                       e.evt.preventDefault();
-                      handlePolygonContextMenu(poly.id);
+                      openShapeAction(poly.id, 'polygon', code?.name ?? '(code)');
                     }}
                   />
                 );
@@ -542,12 +634,13 @@ export function ImageViewer({ document }: { document: DocumentRecord }) {
                 const code = codeById.get(poly.codeId);
                 if (!poly.vertices.length) return null;
                 const [vx, vy] = poly.vertices[0];
+                const hasMemo = memoExistsBySelectionId.has(poly.id);
                 return (
                   <Text
                     key={`label-${poly.id}`}
                     x={vx * intrinsicWNum + 4}
                     y={vy * intrinsicHNum - 18}
-                    text={code?.name ?? '(code)'}
+                    text={hasMemo ? `${code?.name ?? '(code)'} •` : (code?.name ?? '(code)')}
                     fontSize={12}
                     fill="#fff"
                     padding={2}
@@ -572,16 +665,16 @@ export function ImageViewer({ document }: { document: DocumentRecord }) {
                 />
               )}
 
-              {/* Draft polygon outline (low-alpha fill). */}
-              {draftLinePoints && (
+              {/* Draft polygon outline (low-alpha fill when >= 3 vertices). */}
+              {draftPts && (
                 <Line
-                  points={draftLinePoints}
-                  closed={draftVertices.length >= MIN_POLYGON_VERTICES}
+                  points={draftPts}
+                  closed={draftShouldClose(draftVertices)}
                   stroke={activeCodeColor}
                   strokeWidth={1.5}
                   dash={[3, 3]}
                   fill={
-                    draftVertices.length >= MIN_POLYGON_VERTICES
+                    draftShouldClose(draftVertices)
                       ? `${activeCodeColor}14` /* 0x14 ≈ 8 % alpha */
                       : undefined
                   }
@@ -617,9 +710,9 @@ export function ImageViewer({ document }: { document: DocumentRecord }) {
               )}
 
               {/* Live preview: line from last placed vertex to (snapped) cursor. */}
-              {livePreviewPoints && (
+              {livePreviewPts && (
                 <Line
-                  points={livePreviewPoints}
+                  points={livePreviewPts}
                   stroke={activeCodeColor}
                   strokeWidth={1}
                   dash={[2, 4]}
@@ -630,6 +723,50 @@ export function ImageViewer({ document }: { document: DocumentRecord }) {
           </Stage>
         )}
       </div>
+
+      {/* ----- Modals (rendered alongside the Stage, not inside the Stage so
+        Konva events cannot accidentally capture them) ----- */}
+
+      {/* Action Dialog: Edit Memo... + Delete for the right-clicked shape. */}
+      <Dialog
+        open={!!pendingShapeAction}
+        onOpenChange={(open) => !open && setPendingShapeAction(null)}
+      >
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Region Actions</DialogTitle>
+            <div className="text-sm text-slate-500">
+              For code: <span className="font-semibold text-slate-700">{pendingShapeAction?.codeName ?? ''}</span>
+            </div>
+          </DialogHeader>
+          <div className="mt-4 flex flex-col gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              data-testid="region-action-edit-memo"
+              onClick={handleEditMemoFromAction}
+            >
+              Edit Memo...
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              data-testid="region-action-delete"
+              onClick={() => { void handleDeleteFromAction(); }}
+            >
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Region memo dialog (image region + polygon). AnnotationMemoDialog is
+          kept untouched for text annotations (its Delete button lives there). */}
+      <RegionMemoDialog
+        selectionId={editingSelectionId}
+        codeName={editingCodeName}
+        onClose={() => setEditingSelectionId(null)}
+      />
     </div>
   );
 }

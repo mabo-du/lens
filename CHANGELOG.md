@@ -157,7 +157,73 @@ followed by a list refresh. The selection FK on `image_polygon`
 cascade-deletes on the parent `selection` row, so a single IPC
 handles both.
 
+### v0.2 — memos-on-region + polygon-mode test coverage (this commit)
+
+Building on the round-75 polygon-mode UX, this commit adds the memo-on-
+region binding (cross-document annotation memos exposed for image regions
+and polygons) plus the first vitest coverage for the polygon interaction
+state machine, so future edits to vertex / snap / commit behaviour are
+safe to refactor against.
+
+#### Memos-on-region — ImageViewer action menu
+
+The ImageViewer's right-click on a persisted region OR polygon no longer
+goes straight to delete: it now opens a small action Dialog with two
+buttons — **Edit Memo...** and **Delete** — sharing the same memo
+backend as text annotations (`AnnotationMemoDialog`). Because the memo
+table's `linked_selection_id` column already references the parent
+`selection.id` regardless of `selection_type`, no schema migration was
+needed: text / image-region / image-polygon memos row-share the same
+table.
+
+New component `RegionMemoDialog` (alongside the existing
+`AnnotationMemoDialog` which is unchanged). It differs from the text
+version only by (a) accepting `codeName` as a prop instead of looking
+it up in the text-annotations store, and (b) omitting the inline
+Delete button (Delete lives in the action menu so the two paths remain
+discoverable in one place).
+
+Memo-presence badge: shapes with a non-empty memo body render a bullet
+(`•`) appended to the code-name label so a researcher can see at a
+glance which regions have notes attached. The presence set is loaded
+from `memosIpc.listByProject(activeProject.id)` on doc-switch and
+re-loaded after every region/polygon create/delete and after the memo
+dialog closes (so adding a body updates the badge immediately).
+
+#### Polygon-mode test coverage
+
+Round-75 left the polygon interaction math inline in `ImageViewer.tsx`,
+which made safe refactoring hard. This commit extracts the pure logic
+into `src/components/editor/polygonState.ts` and adds vitest coverage
+(`polygonState.test.ts`, 30 tests) so we can ship small changes to
+constants like `SNAP_RADIUS_PX` or `MIN_POLYGON_VERTICES` without
+re-validating by hand.
+
+Pure helpers exported:
+
+| Helper | Inputs | Output |
+|---|---|---|
+| `pushVertex(vertices, v)` | array, vertex | new array with v appended (immutable) |
+| `canCommit(vertices)` | array | bool (boolean vs `MIN/MAX_POLYGON_VERTICES`) |
+| `isSnapToClose(vertices, cursor)` | array, vertex or null | bool (squared-distance compare) |
+| `snappedCursor(vertices, cursor)` | array, vertex or null | the effective cursor (snap zone → v[0]) |
+| `livePreviewPoints(vertices, cursor)` | array, vertex or null | `Line` points array or null |
+| `draftLinePoints(vertices)` | array | `Line` points array (null for < 2 vertices) |
+| `draftShouldClose(vertices)` | array | bool (mirrors the `<Line closed>` prop) |
+| `modeSwitchReset()` | `()` | `{ draftRect: null, draftVertices: [], cursorPos: null }` |
+
+`ImageViewer.tsx` now imports these and the inline math is reduced to
+state plumbing + Konva rendering. Behaviour is unchanged: the round-75
+gate suite (tsc 0 / cargo 0 / vitest 0 / vite build 0) is re-greened
+with the new tests included.
+
+Snap-distance boundary cases covered by the tests:
+- 11.31 px off-axis (8 right + 8 down) — inside zone
+- 12.0 px straight down — exactly on the boundary (inclusive)
+- 12.73 px off-axis (9 right + 9 down) — outside zone
+- MAX_POLYGON_VERTICES = 64 boundary (64 → commit, 65 → reject)
+- MIN_POLYGON_VERTICES = 3 boundary (2 → reject, 3 → commit)
+
 ### Planned for v0.2 (remaining)
-- Memos-on-region binding (cross-document annotation memos)
 - Konva vs custom-canvas performance benchmarking under WSL/Raspberry Pi 4
 - Apple-signing release.yml matrix verification + GA cut
