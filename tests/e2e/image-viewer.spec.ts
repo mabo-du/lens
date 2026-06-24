@@ -161,6 +161,11 @@ test.describe('ImageViewer polygon mode', () => {
     // Playwright's auto-retrying assertion polls until the dialog appears.
     await expect(page.getByText('Region Memo')).toBeVisible({ timeout: 10_000 });
     // The "For code: <name>" sub-line shows the polygon code's name.
-    await expect(page.getByText('Test Code', { exact: true })).toBeVisible();
+    // Scope to the RegionMemoDialog — the action Dialog also contains
+    // "Test Code" while it's animating closed (100ms), causing a strict
+    // mode violation when getByText matches both.
+    await expect(
+      page.getByRole('dialog', { name: 'Region Memo' }).getByText('Test Code', { exact: true }),
+    ).toBeVisible();
   });
 });
