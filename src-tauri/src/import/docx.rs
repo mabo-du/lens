@@ -5,9 +5,9 @@
 //! `roxmltree` crates already in `Cargo.toml` — no Node-sidecar required for
 //! the MVP hot path. The IPC `raw_text` parameter on `documents_import` is
 //! retained as a renderer-side escape hatch for any future alternative
-//! extractor; no Mammoth.js fallback is currently shipped (Mammoth was
-//! removed in the P4.3 dependency sweep and `package.json` carries no such
-//! dependency).
+//! extractor; no Mammoth.js fallback ships today — Mammoth was
+//! removed in the P4.3 sweep and `package.json` carries no such
+//! dependency.
 //!
 //! Skipped XML nodes:
 //! - `<w:proofErr w:type="spellStart|spellEnd|gramStart|gramEnd">` —
