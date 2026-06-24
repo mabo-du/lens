@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LENS Konva Perf Benchmark</title>
+    <style>
+      body {
+        font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+        margin: 0;
+        padding: 16px;
+        background: #0f172a;
+        color: #e2e8f0;
+      }
+      #stage-host {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        border: 1px solid #1e293b;
+        background: #020617;
+      }
+      #results {
+        white-space: pre-wrap;
+        font-size: 13px;
+        max-width: calc(100vw - 280px);
+      }
+      h1 { font-size: 18px; margin: 0 0 12px 0; }
+      .muted { color: #64748b; }
+    </style>
+  </head>
+  <body>
+    <h1>LENS v0.2 — Konva Perf Benchmark</h1>
+    <p class="muted">
+      Synthetic PNGs at three sizes × N bbox draws × N polygon draws.
+      Output written to <code>#results</code> as JSON + console.log.
+      No IPC, no React — pure Konva on synthetic 8-bit RGBA bitmaps.
+    </p>
+    <div id="stage-host"></div>
+    <pre id="results">running…</pre>
+
+    <script type="module" src="/src/perf.ts"></script>
+  </body>
+</html>
