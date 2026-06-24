@@ -52,13 +52,7 @@ jobs:
       - name: Tauri dry-build (host-appropriate bundles, no installers)
         run: |
           cd src-tauri
-          # Runner is fixed ubuntu-latest, so hardcode the Linux bundle list
-          # (matches the Linux branch of release-dry-run.sh's case statement).
-          # Pass --bundles explicitly so the host-appropriate bundle code path
-          # is exercised (without --bundles, Tauri 2.x defaults to ALL host
-          # targets; on Ubuntu that includes deb,rpm,appimage anyway, but
-          # being explicit matches the shell script behaviour for audit).
-          # --no-bundle skips writing installer artefacts (this is a dry-run).
+          # Runner is fixed ubuntu-latest; scope bundles to Linux host-appropriates + dry-run (mirrors scripts/release-dry-run.sh step 4).
           npx tauri build --bundles deb,rpm,appimage --no-bundle
 
       - name: Upload dry-run artefacts
