@@ -829,6 +829,82 @@ async fn project_name_accepts_valid_name() {
 }
 
 #[tokio::test]
+async fn project_create_rejects_nonexistent_target_dir() {
+    let (state, _temp_dir) = setup_test_state().await;
+    let err = projects_create_internal(
+        &state,
+        "Test".to_string(),
+        None,
+        "/nonexistent/does/not/exist/anywhere".to_string(),
+        None,
+    )
+    .await
+    .expect_err("Project creation against a missing target dir must be rejected");
+    assert!(
+        err.contains("does not exist"),
+        "Error should explain target dir is missing; got: {}",
+        err
+    );
+}
+
+#[tokio::test]
+async fn project_create_rejects_when_target_is_a_file() {
+    let (state, _temp_dir) = setup_test_state().await;
+    let blocking_file = _temp_dir.path().join("not-a-dir.txt");
+    std::fs::write(&blocking_file, "x").expect("write blocking file");
+    let err = projects_create_internal(
+        &state,
+        "Test".to_string(),
+        None,
+        blocking_file.to_string_lossy().to_string(),
+        None,
+    )
+    .await
+    .expect_err("Project creation against a file path must be rejected");
+    assert!(
+        err.contains("not a directory"),
+        "Error should explain target is not a directory; got: {}",
+        err
+    );
+}
+
+#[tokio::test]
+async fn project_create_rejects_collision_with_existing_lens_project() {
+    let (state, _temp_dir) = setup_test_state().await;
+    // First, create a project at the canonical path.
+    let first = projects_create_internal(
+        &state,
+        "Collision Target".to_string(),
+        None,
+        _temp_dir.path().to_string_lossy().to_string(),
+        None,
+    )
+    .await
+    .expect("First project creation should succeed");
+    assert_eq!(first.name, "Collision Target");
+    drop(first);
+
+    // Now create a *new* AppState pointing at the same target dir but
+    // targeting the same project name. The collision check must fire
+    // BEFORE we attempt to overwrite the existing .qdaproj.
+    let (state2, _temp_dir2) = setup_test_state().await;
+    let err = projects_create_internal(
+        &state2,
+        "Collision Target".to_string(),
+        None,
+        _temp_dir.path().to_string_lossy().to_string(),
+        None,
+    )
+    .await
+    .expect_err("Collision with existing project must be rejected");
+    assert!(
+        err.contains("already exists"),
+        "Error should mention existing project; got: {}",
+        err
+    );
+}
+
+#[tokio::test]
 async fn local_user_is_auto_created_on_project_create() {
     let (state, _temp_dir) = setup_test_state().await;
 

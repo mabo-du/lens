@@ -13,6 +13,7 @@ import { qdpxImportIpc } from './ipc/qdpx_import';
 import { useEffect, useState } from 'react';
 import { EncryptionDialog } from './components/settings/EncryptionDialog';
 import { ConflictDialog } from './components/settings/ConflictDialog';
+import { ProjectNameDialog } from './components/settings/ProjectNameDialog';
 import { usePromptDialog } from './hooks/usePromptDialog';
 import { Beaker, FolderOpen, Plus, X } from 'lucide-react';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -59,6 +60,7 @@ function App() {
     return encryptPrompt.prompt();
   };
 
+  const namePrompt = usePromptDialog<string>();
   const conflictPrompt = usePromptDialog<'merge' | 'replace'>();
 
   const loadProjectData = async (proj: { id: string; name: string; description: string | null; createdAt: string; updatedAt: string }, folderPath: string) => {
@@ -178,19 +180,23 @@ function App() {
 
   const handleCreateProject = async () => {
     const selected = await openDialog({ directory: true });
-    if (selected && typeof selected === 'string') {
-      try {
-        const encryptionKey = await promptEncryption('create');
-        const proj = await projectsIpc.create("New Project", "", selected, encryptionKey ?? undefined);
-        const folderPath = `${selected}/${proj.name}`;
-        setActiveProject(proj);
-        setDocuments([]);
-        setCodes([]);
-        setMemos([]);
-        addRecentProject({ path: folderPath, name: proj.name, openedAt: new Date().toISOString() });
-      } catch (e) {
-        toast.error("Failed to create project: " + e);
-      }
+    if (!selected || typeof selected !== 'string') return;
+
+    // P1.8: Prompt for a project name (no longer hardcoded "New Project").
+    const name = await namePrompt.prompt();
+    if (!name) return;
+
+    try {
+      const encryptionKey = await promptEncryption('create');
+      const proj = await projectsIpc.create(name, "", selected, encryptionKey ?? undefined);
+      const folderPath = `${selected}/${proj.name}`;
+      setActiveProject(proj);
+      setDocuments([]);
+      setCodes([]);
+      setMemos([]);
+      addRecentProject({ path: folderPath, name: proj.name, openedAt: new Date().toISOString() });
+    } catch (e) {
+      toast.error("Failed to create project: " + e);
     }
   };
 
@@ -204,6 +210,11 @@ function App() {
           mode={encryptMode}
           onConfirm={(pw) => encryptPrompt.resolve(pw)}
           onCancel={() => encryptPrompt.resolve(null)}
+        />
+        <ProjectNameDialog
+          open={namePrompt.open}
+          onConfirm={(name) => namePrompt.resolve(name)}
+          onCancel={() => namePrompt.resolve(null)}
         />
         <div className="flex h-screen items-center justify-center bg-slate-100">
         <div className="p-8 bg-white shadow-md rounded-lg text-center space-y-6">
@@ -269,6 +280,11 @@ function App() {
         mode={encryptMode}
         onConfirm={(pw) => encryptPrompt.resolve(pw)}
         onCancel={() => encryptPrompt.resolve(null)}
+      />
+      <ProjectNameDialog
+        open={namePrompt.open}
+        onConfirm={(name) => namePrompt.resolve(name)}
+        onCancel={() => namePrompt.resolve(null)}
       />
       <ConflictDialog
         open={conflictPrompt.open}

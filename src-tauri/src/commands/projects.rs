@@ -86,6 +86,42 @@ fn validate_project_name(name: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Validate the chosen target directory before creating a project folder
+/// inside it. Defense-in-depth: even though the native folder picker should
+/// only return paths the user pointed at, we further check that:
+///
+/// 1. `target_dir` actually exists and is a directory (otherwise
+///    `fs::create_dir_all` would silently create it -- surprising).
+/// 2. `<target_dir>/<project_name>/project.qdaproj` does NOT already exist
+///    (would silently overwrite an existing LENS project).
+///
+/// These are belt-and-suspenders checks behind the existing strict
+/// `validate_project_name` and the invariant sqlite pool is opened against
+/// the chosen path.
+fn validate_target_dir(target_dir: &str, project_name: &str) -> Result<(), String> {
+    let target_path = PathBuf::from(target_dir);
+    if !target_path.exists() {
+        return Err(format!(
+            "Target directory does not exist: {}",
+            target_dir
+        ));
+    }
+    if !target_path.is_dir() {
+        return Err(format!(
+            "Target path is not a directory: {}",
+            target_dir
+        ));
+    }
+    let qdaproj_path = target_path.join(project_name).join("project.qdaproj");
+    if qdaproj_path.exists() {
+        return Err(format!(
+            "A LENS project already exists at {}/{}/project.qdaproj. Pick a different name or open the existing project instead.",
+            target_dir, project_name
+        ));
+    }
+    Ok(())
+}
+
 pub async fn projects_create_internal(
     state: &AppState,
     name: String,
@@ -94,6 +130,7 @@ pub async fn projects_create_internal(
     encryption_key: Option<String>,
 ) -> Result<Project, String> {
     validate_project_name(&name)?;
+    validate_target_dir(&target_dir, &name)?;
 
     let mut project_dir = PathBuf::from(&target_dir);
     project_dir.push(&name);
