@@ -16,6 +16,10 @@ charter doctor                                # Charter conformance gate
 
 Pre-commit (`githooks/pre-commit`) runs the first two. CI matrix: ubuntu/windows/macos. **Launch:** `npm run tauri dev` — `npm run dev` is vite-only without Tauri bindings.
 
+## History reshaping rule
+
+Before any `git reset`/`rebase` that rewrites >1 commit (squash, fixup chain, reword of non-HEAD), first run `git branch backup-pre-reshape HEAD~N` (where N is the depth of the rewrite). Recovery via `git fsck --unreachable` after `gc` is fragile; a labelled backup branch always recovers.
+
 ## Off-Limits (MVP)
 
 - Edit `migrations/*.sql` directly — add a new migration. Schema is also the on-disk file format.
