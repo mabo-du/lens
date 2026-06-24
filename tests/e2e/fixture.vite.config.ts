@@ -32,5 +32,11 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, 'fixture/dist'),
     emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        index: path.resolve(__dirname, 'fixture/index.html'),
+        workspace: path.resolve(__dirname, 'fixture/workspace.html'),
+      },
+    },
   },
 });
