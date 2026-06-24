@@ -1,4 +1,3 @@
-<!-- gitnexus:start -->
 # LENS — Qualitative Data Analysis (QDA) Desktop App
 
 **Stack:** Tauri 2 (Rust + React 19/TypeScript 5), SQLite via sqlx, TailwindCSS 4, Zustand 5, ProseMirror.
@@ -24,11 +23,12 @@ npx tsc --noEmit && (cd src-tauri && cargo test && cargo build)
 - Run `gitnexus_detect_changes()` before committing.
 - Use `gitnexus_query` for concepts, `gitnexus_context` for symbols.
 - Never rename with find-and-replace; use `gitnexus_rename`.
+- Always verify before claiming completion: `npx tsc --noEmit && (cd src-tauri && cargo test && cargo build)`.
 
 ## Project Structure
 
 | Directory | Purpose |
-|-----------|--------|
+|-----------|---------|
 | `src/` | React frontend |
 | `src-tauri/` | Rust backend |
 | `src-tauri/src/db/migrations/` | SQLite migrations (off-limits) |
@@ -44,4 +44,6 @@ git config core.hooksPath .githooks && chmod +x .githooks/pre-commit
 - CI: `.github/workflows/ci.yml` (TS build + Rust matrix ubuntu/windows/macos).
 - `.github/workflows/charter.yaml` runs Charter on PRs + pushes to main.
 - See `.claude/skills/gitnexus/` for impact analysis, refactoring, and debugging.
+
+<!-- gitnexus:start -->
 <!-- gitnexus:end -->

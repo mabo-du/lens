@@ -54,11 +54,8 @@ function InputGroupAddon({
       data-slot="input-group-addon"
       data-align={align}
       className={cn(inputGroupAddonVariants({ align }), className)}
-      // Click-to-focus is a deliberate mouse-only UX (cursor:text styling signals
-      // that the wrapper focuses an inner input). The jsx-a11y rule's key-event
-      // requirement doesn't apply here because the wrapper is intentionally not
-      // focusable — keyboard users Tab to the inner input directly. Suppress the
-      // false positive to match the same discipline we use in CodeTree.tsx.
+      // Mouse-only click-to-focus; wrapper intentionally not focusable
+      // (matches CodeTree.tsx jsx-a11y/prefer-tag-over-role suppression).
       // eslint-disable-next-line jsx-a11y/click-events-have-key-events
       onClick={(e) => {
         if ((e.target as HTMLElement).closest("button")) {
