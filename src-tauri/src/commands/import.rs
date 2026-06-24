@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::{command, AppHandle, State};
 use uuid::Uuid;
 
@@ -11,7 +11,7 @@ use crate::import::{docx, normalise, pdf, txt};
 /// (see `src/components/document-list/DocumentList.tsx`) and passes it through
 /// the `raw_text` IPC parameter. Keep this constant in sync with the mammoth
 /// version declared in `package.json`.
-const MAMMOTH_EXTRACTOR_ID: &str = "mammoth-1.12.0";
+const DOCX_EXTRACTOR_ID: &str = "lens-docx-1.0.0";
 
 /// Extractor identifier for PDF imports. The version is baked in at build
 /// time via `build.rs` reading `pdfplumber.__version__`; falls back to
@@ -62,7 +62,7 @@ pub async fn documents_import_internal(
         Some(text) => text,
         None => match file_format.as_str() {
             "txt" => txt::extract_text(&file_path)?,
-            "docx" => docx::extract_text_from_docx(&file_path)?,
+            "docx" => docx::extract_text_from_docx(Path::new(&file_path))?,
             "pdf" => {
                 let app = app.ok_or("PDF extraction requires AppHandle")?;
                 pdf::extract_text(app, &file_path).await?
@@ -74,7 +74,7 @@ pub async fn documents_import_internal(
     // Determine extractor ID for provenance tracking.
     let extractor_id = match file_format.as_str() {
         "txt" => "plain-text-1.0",
-        "docx" => MAMMOTH_EXTRACTOR_ID,
+        "docx" => DOCX_EXTRACTOR_ID,
         "pdf" => PDFPLUMBER_EXTRACTOR_ID,
         _ => unreachable!(
             "extractor_id: format {} should have been rejected above",
