@@ -24,11 +24,43 @@ dist-ssr
 *.sw?
 
 # Agent and tooling artifacts
+# Note: .claude/skills/ is re-included below; project-level Claude SKILL.md
+# files are peer-published tooling and belong in the open-source repo.
 *.charter-session
 .charter/
-.claude/local/
+.agents/
+.beads/
+.claude/*
+!.claude/skills/
+.ctx/
+.gitnexus/
+.windsurf/
+.aidevops.json
+
+# Cursor / Windsurf caches
 .cursor/cache/
 .hk/
+
+# Rust build targets
+/target/
+/src-tauri/target/
+
+# PyInstaller + sidecar build artefacts
+# (the canonical Linux-side pdfplumber bundle is built per-platform
+#  by scripts/build-sidecar.sh, not committed)
+/src-tauri/sidecars/*-*
+/src-tauri/sidecars/*/build/
+/src-tauri/sidecars/*/dist/
+/src-tauri/sidecars/*/.venv/
+*.pyz
+*.spec
+base_library.zip
+
+# Backup files
+*~
+*.bak
+*.orig
+*.rej
 
 # Environment and secrets
 .env*
