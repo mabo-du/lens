@@ -90,12 +90,22 @@ jobs:
         #
         # Round-80 follow-on: REMOVED `npx tsc --noEmit` here. The
         # `typescript:` job already runs `npx tsc --noEmit` for the
-        # exact same project; running it twice was redundant AND was
-        # somehow producing vitest runtime errors in CI on this
-        # `"type": "module"` + `vitest ^4.1.9` project (the fixture
-        # build + Playwright browser launch alone are sufficient
-        # signal that the FE is intact for E2E purposes).
-        run: npx playwright test --reporter=list
+        # exact same project; running it twice was redundant.
+        #
+        # Round-82 follow-on: pass `--config` explicitly. Playwright
+        # v1.61's default `testMatch` is
+        # `**/*.@(spec|test).?(c|m)[jt]?(s|x)`, which matches BOTH
+        # `.spec.ts` AND `.test.ts` and walks recursively. Without
+        # `playwright.config.ts` in the project root, Playwright uses
+        # the default and tries to execute our vitest unit-test files
+        # in `src/**/*.test.ts` as Playwright tests — which loads
+        # vitest's runner partially and crashes with
+        # `Vitest mocker was not initialized in this environment`
+        # + `ReferenceError: __dirname is not defined in ES module
+        # scope`. The `--config=` flag forces Playwright to load our
+        # custom config (which has `testMatch: ['**/*.spec.ts']` —
+        # `.spec.ts` only — and `testDir: ./tests/e2e`).
+        run: npx playwright test --config=tests/e2e/playwright.config.ts --reporter=list
       # Round-79 — always upload the harness artifacts so on-call can
       # triage failures WITHOUT re-running the job. Mirror `.lens-e2e/`
       # bundles the timestamped globalSetup log + the kill receipt.
