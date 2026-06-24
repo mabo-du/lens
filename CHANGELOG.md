@@ -59,6 +59,36 @@ SQLite data layer with race-safe dedup, local-first Tauri 2 desktop shell.
   renderer). Update endpoint pinned to `github.com/mabo-du/lens/releases/latest`
   with an explicit public key.
 
+## [0.1.0-rc.2] - 2026-06-24
+
+Patch-level RC. Re-tags 0.1.0-rc.1 with the release.yml matrix fix.
+The rc.1 tag push (release run `28076077890`) failed across all 4
+platforms with `log not found` because three pinned action SHAs in
+`.github/workflows/release.yml` had drifted past the resolver — the
+REST API returned HTTP 422 for every `actions/*@<sha>` reference.
+No surface features change from rc.1.
+
+### Fixed
+- **release.yml matrix** — refreshes three pinned action SHAs to
+  current live commits:
+  - `actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020` (v4)
+  - `dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8` (stable)
+  - `tauri-apps/tauri-action@fce9c6108b31ea247710505d3aaaa893ee6768d4` (v0 rolling)
+- **release-dry-run.yml** — same `setup-node` + `rust-toolchain` SHA
+  refresh; the manual `npx tauri build --no-bundle` step is preserved
+  so this workflow continues to verify the pipeline *without* producing
+  a draft release artefact (its stated purpose).
+
+### Added
+- **`scripts/refresh-release-sha-pins.sh`** — maintainer tool that
+  diffs the workflow pins against the latest GitHub refs (defaults
+  dry-run; `--apply` writes after confirmation). Companion to the
+  release.yml release-process section in README.md.
+- **README release-process docs** — the new "Release Process" section
+  documents the cut-RC-then-promote workflow, the Apple-notarization
+  secret prerequisites, and the inline SHA-bump procedure so future
+  maintainers don't repeat the rc.1 matrix failure.
+
 ## [Unreleased]
 
 ### Planned for v0.1.1
