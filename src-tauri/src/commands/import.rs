@@ -4,7 +4,7 @@ use tauri::{command, AppHandle, State};
 use uuid::Uuid;
 
 use super::projects::AppState;
-use crate::import::{normalise, pdf, txt};
+use crate::import::{docx, normalise, pdf, txt};
 
 /// Extractor identifier written to the `document.extractor_id` column for
 /// DOCX imports. The current path extracts text in the renderer via Mammoth.js
@@ -62,11 +62,7 @@ pub async fn documents_import_internal(
         Some(text) => text,
         None => match file_format.as_str() {
             "txt" => txt::extract_text(&file_path)?,
-            "docx" => {
-                return Err("DOCX extraction must be performed in the renderer. \
-                         Re-import via the Document List panel."
-                    .to_string());
-            }
+            "docx" => docx::extract_text_from_docx(&file_path)?,
             "pdf" => {
                 let app = app.ok_or("PDF extraction requires AppHandle")?;
                 pdf::extract_text(app, &file_path).await?
