@@ -18,7 +18,7 @@ Pre-commit (`githooks/pre-commit`) runs the first two. CI matrix: ubuntu/windows
 
 ## History reshaping rule
 
-Before any `git reset --soft` or `git rebase -i` that DROPS or MERGES commits (i.e., loses commit content), first run `git branch backup-pre-reshape HEAD~N` (where N is the depth of the rewrite). Recovery via `git fsck --unreachable` after `gc` is fragile; a labelled backup branch always recovers. *Excludes:* pure re-order (`rebase -i` reorder preserves content), `commit --amend` (no commit destruction), and cherry-pick (linear).
+Before any `git reset --soft` or `git rebase -i` that DROPS or MERGES commits (i.e., loses commit content), *or any history-modifying tool that rewrites commit objects* (`git filter-repo`, `git replace`, BFG repo cleaner, etc.), first run `git branch backup-pre-reshape HEAD~N` (where N is the depth of the rewrite). Recovery via `git fsck --unreachable` after `gc` is fragile; a labelled backup branch always recovers. *Excludes:* pure re-order (`rebase -i` reorder preserves content), `commit --amend` (no commit destruction), and cherry-pick (linear).
 
 ## Off-Limits (MVP)
 
