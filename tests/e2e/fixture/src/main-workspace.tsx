@@ -44,6 +44,22 @@ interface FixtureMemo {
   updatedAt: string;
 }
 
+interface FixtureDocument {
+  id: string;
+  projectId: string;
+  title: string;
+  originalPath: string | null;
+  fileFormat: string;
+  plainText?: string;
+  textHash: string;
+  extractorId: string;
+  wordCount: number;
+  intrinsicW: number | null;
+  intrinsicH: number | null;
+  importedAt: string;
+  sortOrder: number;
+}
+
 const PLAIN_TEXT = `This is a sample interview transcript for testing purposes.
 
 The participant described their experience with the new system in detail. They mentioned several key themes including usability challenges and unexpected benefits. The training program was cited as particularly helpful for onboarding new team members.
@@ -87,6 +103,8 @@ const lensTest: LENS_TEST = {
     mockFixture.codes.length = 0;
     mockFixture.annotations.length = 0;
     mockFixture.memos.length = 0;
+    // Keep the seeded text document (doc-text-1); clear any imported ones.
+    mockFixture.documents.length = 1;
     lensTest.invocations.length = 0;
   },
   fixture: mockFixture,
@@ -98,6 +116,35 @@ const invoke = async (cmd: string, args: unknown): Promise<unknown> => {
     // ---- Documents ---------------------------------------------------------
     case 'document_get_content':
       return PLAIN_TEXT;
+    case 'documents_import': {
+      const a = args as { projectId: string; filePath: string; fileFormat: string };
+      const basename = a.filePath.split('/').pop() ?? a.filePath;
+      const fmt = a.fileFormat.toLowerCase();
+      const doc: FixtureDocument = {
+        id: genId(),
+        projectId: a.projectId,
+        title: basename,
+        originalPath: a.filePath,
+        fileFormat: fmt,
+        plainText: `Mock ${fmt.toUpperCase()} content for ${basename}`,
+        textHash: `mock-${genId()}`,
+        extractorId: `mock-${fmt}`,
+        wordCount: 5,
+        intrinsicW: null,
+        intrinsicH: null,
+        importedAt: new Date().toISOString(),
+        sortOrder: mockFixture.documents.length,
+      };
+      mockFixture.documents.push(doc);
+      return doc;
+    }
+    case 'documents_list':
+      return mockFixture.documents;
+    case 'document_delete':
+      mockFixture.documents = mockFixture.documents.filter(
+        d => d.id !== (args as { id: string }).id,
+      );
+      return null;
 
     // ---- Annotations -------------------------------------------------------
     case 'annotations_create': {
@@ -279,19 +326,25 @@ useUiStore.setState({ activeDocumentId: 'doc-text-1' });
 (window as unknown as Record<string, unknown>).useUiStore = useUiStore;
 
 // ---------------------------------------------------------------------------
-// 3. Mount workspace (DocumentEditor + CodeTree + SearchDialog)
+// 3. Mount workspace (DocumentList + DocumentEditor + CodeTree + SearchDialog)
 // ---------------------------------------------------------------------------
 
 import { DocumentEditor } from '@/components/editor/DocumentEditor';
 import { CodeTree } from '@/components/code-tree/CodeTree';
 import { SearchDialog } from '@/components/search/SearchDialog';
+import { DocumentList } from '@/components/document-list/DocumentList';
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
     <div style={{ display: 'flex', height: '100vh', width: '100vw' }}>
-      {/* Left: Code Tree */}
-      <div style={{ width: '250px', flexShrink: 0, borderRight: '1px solid #e2e8f0' }}>
-        <CodeTree />
+      {/* Left: Documents + Codes */}
+      <div style={{ width: '250px', flexShrink: 0, borderRight: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ flex: '0 0 40%', minHeight: 0, borderBottom: '1px solid #e2e8f0' }}>
+          <DocumentList />
+        </div>
+        <div style={{ flex: '1 1 60%', minHeight: 0 }}>
+          <CodeTree />
+        </div>
       </div>
       {/* Center: Document Editor */}
       <div style={{ flex: 1, minWidth: 0 }}>
