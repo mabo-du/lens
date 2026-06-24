@@ -40,7 +40,7 @@
       "active": true,
       "dialog": true,
       "endpoints": [
-        "https://github.com/heritage-tech/lens/releases/latest/download/latest.json"
+        "https://github.com/mabo-du/lens/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERBODgzQ0U5MDE1MjQ0M0QKUldROVJGSUI2VHlJMmt6Q3VLNWVnT2ZCalRWcE1nSkcvVnRDK0Q1NyszTlN3RkdHN1FHTmhUMGIK",
       "windows": {
