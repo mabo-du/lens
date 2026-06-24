@@ -95,7 +95,13 @@ function writeKillReceipt(state) {
   }
 }
 
-log('lens-e2e', 'globalTeardown entered');
-const state = killHttpServer();
-writeKillReceipt(state);
-log('lens-e2e', 'globalTeardown complete');
+// Round-84 NOTE: Playwright v1.61 contract — globalTeardown must export a
+// SINGLE default function. Earlier this ran as a top-level script; that
+// failed with `Error: file must export a single function` once round-83
+// fixed path resolution and Playwright started actually loading this file.
+export default function globalTeardown() {
+  log('lens-e2e', 'globalTeardown entered');
+  const state = killHttpServer();
+  writeKillReceipt(state);
+  log('lens-e2e', 'globalTeardown complete');
+}
