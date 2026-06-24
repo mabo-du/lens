@@ -2,7 +2,7 @@
 
 ## Overview
 
-LENS is a single-user, offline-first qualitative data analysis (QDA) desktop application built with Tauri 2 (Rust backend) and React 18 + TypeScript (frontend).
+LENS is a single-user, offline-first qualitative data analysis (QDA) desktop application built with Tauri 2 (Rust backend) and React 19 + TypeScript (frontend).
 
 ## Data Model
 
@@ -32,7 +32,7 @@ All IPC follows a `domain:operation` naming convention (e.g., `codes:create`, `a
 ## Import Pipeline
 
 1. Frontend opens file via native dialog (`tauri-plugin-dialog`)
-2. For DOCX: Mammoth.js extracts text in the renderer, passes via `raw_text` IPC param
+2. For DOCX: xmldom + jszip extract text in the renderer, passes via `raw_text` IPC param
 3. For PDF: pdfplumber sidecar binary extracts text on the Rust side
 4. For TXT: read directly as UTF-8
 5. All text runs through normalisation (NFC, ligature expansion, line ending normalisation)
