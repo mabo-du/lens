@@ -42,19 +42,26 @@ export function validateProjectNameClient(v: string): string {
     return `Project name must be ${MAX_PROJECT_NAME_LENGTH} characters or fewer`;
   }
 
-  // Mirror Rust's `Path::new(name).components()` rejection of any
-  // `CurDir` ('.') or `ParentDir` ('..') segment, plus leading-dot
-  // segments that Rust resolves as CurDir/ParentDir (e.g. ".foo",
-  // "..foo", "foo/.", "foo/.."). Splitting on both POSIX and Windows
-  // path separators here matches what Rust's components() collapses.
-  const segments = trimmed.split(/[/\\]+/).filter((s) => s.length > 0);
-  if (
-    segments.some(
-      (s) => s === '.' || s === '..' || s.startsWith('.'),
-    )
-  ) {
-    return "Project name segments must not be '.' or '..' or start with '.'";
+  // Reject a trailing separator before the segment split. Without this,
+  // the split-and-filter below would collapse "foo/" to ["foo"] and
+  // silently accept it; Rust's `Path::components()` would too, but
+  // fs::create_dir("foo/") later fails at the OS layer because '/' is a
+  // separator, not a valid filename character.
+  if (/[/\\]$/.test(trimmed)) {
+    return 'Project name must not end with a path separator';
   }
+
+  // Mirror Rust's `Path::new(name).components()` rejection of any
+  // `CurDir` ('.') or `ParentDir` ('..') segment. Leading-dot segments
+  // resolve as CurDir/ParentDir in Rust's parser (".foo" -> [CurDir,
+  // Normal("foo")], "foo/." -> [Normal("foo"), CurDir]). A single
+  // `startsWith('.')` covers all of '.' / '..' / '.foo' / '..foo' on
+  // every segment, so no explicit '.' / '..' literals are needed.
+  const segments = trimmed.split(/[/\\]+/);
+  if (segments.some((s) => s.startsWith('.'))) {
+    return "Project name parts must not start with '.'";
+  }
+
   // Absolute paths: POSIX leading slash, or Windows drive letter prefix.
   if (
     trimmed.startsWith('/') ||
