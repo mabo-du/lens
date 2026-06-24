@@ -41,8 +41,19 @@ export function validateProjectNameClient(v: string): string {
   if (trimmed.length > MAX_PROJECT_NAME_LENGTH) {
     return `Project name must be ${MAX_PROJECT_NAME_LENGTH} characters or fewer`;
   }
-  if (trimmed.includes('..') || trimmed === '.') {
-    return "Project name must not contain '..' or '.'";
+
+  // Mirror Rust's `Path::new(name).components()` rejection of any
+  // `CurDir` ('.') or `ParentDir` ('..') segment, plus leading-dot
+  // segments that Rust resolves as CurDir/ParentDir (e.g. ".foo",
+  // "..foo", "foo/.", "foo/.."). Splitting on both POSIX and Windows
+  // path separators here matches what Rust's components() collapses.
+  const segments = trimmed.split(/[/\\]+/).filter((s) => s.length > 0);
+  if (
+    segments.some(
+      (s) => s === '.' || s === '..' || s.startsWith('.'),
+    )
+  ) {
+    return "Project name segments must not be '.' or '..' or start with '.'";
   }
   // Absolute paths: POSIX leading slash, or Windows drive letter prefix.
   if (
