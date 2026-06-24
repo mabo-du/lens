@@ -109,8 +109,55 @@ Dependable image-doc UX: Konva-powered image viewer with drag-to-create bbox reg
 
 ## [Unreleased]
 
-### Planned for v0.2
-- Polygon/freehand region drawing (currently bbox only)
+### v0.2 — polygon-mode UX (frontend, this commit)
+
+Building on the round-74 v0.2 polygon backend foundation (migration 06 +
+`image_polygon` extension table + 3 IPC handlers + round-trip test + TS
+IPC), the Konva image viewer now ships an interactive **polygon-mode
+drawing tool** alongside the existing bbox mode.
+
+#### ImageViewer — mode toggle (Rectangle | Polygon)
+
+A pill-style toggle at the top-left of the viewer toolbar switches the
+active drawing mode for the current image document. Default is
+Rectangle (preserves the existing drag-to-create UX). Switching modes
+cancels any in-flight draft of the other mode.
+
+#### Polygon mode — interaction model
+
+| Action | Result |
+|---|---|
+| Click on stage | Add a vertex at the cursor position |
+| Move cursor (≥1 vertex placed) | Live preview line from last vertex to cursor |
+| Right-click OR Enter | Commit polygon (requires ≥3 vertices); otherwise a toast hints to add more |
+| Esc | Cancel the in-flight draft (discard vertices) |
+| Click within 12px of vertex 0 (≥3 vertices already placed) | Highlighted snap-to-close ring on vertex 0 — visual only, click itself adds a duplicate vertex on top |
+
+Once a polygon is committed, `imagePolygonsIpc.create` posts the record
+with vertices serialised in 0..1 proportional coords. Polygon backend
+validation (`validate_polygon`) enforces 3..64 vertices, finite values
+in `[0,1]²`. The list auto-refreshes after every commit / delete.
+
+#### Polygon rendering
+
+Persisted polygons render as Konva `<Line closed=true>` with the
+assigned code colour stroke and a 0.2-alpha fill, plus a small white
+code-name label at the first vertex for parity with bbox labels. The
+in-flight draft renders an uncommitted closed polygon at 0.08-alpha
+fill, a small filled circle at every placed vertex, and a dashed
+preview segment from the last vertex to the cursor. The snap-to-close
+ring is an extra stroked circle (8px radius) around vertex 0 that
+appears only when both conditions hold.
+
+#### Polygon deletion
+
+Right-click on a persisted polygon's stroke opens the same delete
+confirmation as the bbox path — `imagePolygonsIpc.delete(id)`
+followed by a list refresh. The selection FK on `image_polygon`
+cascade-deletes on the parent `selection` row, so a single IPC
+handles both.
+
+### Planned for v0.2 (remaining)
 - Memos-on-region binding (cross-document annotation memos)
 - Konva vs custom-canvas performance benchmarking under WSL/Raspberry Pi 4
 - Apple-signing release.yml matrix verification + GA cut
