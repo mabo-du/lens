@@ -72,7 +72,7 @@ older lockfiles may still expect MIT. Verify the actual licence of the
 pinned version before tagging any release:
 
 ```bash
-npx license-checker --plain-text | grep lucide-react
+npx license-checker --markdown | grep lucide-react
 ```
 
 ### Geist variable font (SIL OFL-1.1)
@@ -90,7 +90,9 @@ language:
   entire superset font collection is relicensed freely.
 
 For binary distributions the font `LICENSE.txt` should be bundled
-alongside the executable per the OFL redistribution clause.
+alongside the executable per the OFL redistribution clause. For
+verifying a font's Reserved Font Name clause before bundling, see the
+OFL FAQ at <https://scripts.sil.org/OFL-FAQ>.
 
 ## Pre-release verification
 
