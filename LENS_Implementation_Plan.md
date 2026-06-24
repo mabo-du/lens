@@ -31,7 +31,7 @@ The Lexical report (titled "The Lexical Advantage") explicitly states in its own
 | Rich text editor | ProseMirror | `prosemirror-state`, `prosemirror-view`, `prosemirror-model`, `prosemirror-commands`, `prosemirror-history` |
 | Code tree component | react-arborist | `react-arborist` |
 | Database | SQLite via Tauri SQL plugin | `tauri-plugin-sql` (Rust), `@tauri-apps/plugin-sql` |
-| DOCX import | xmldom + jszip (custom renderer-side parser) | `@xmldom/xmldom`, `jszip` |
+| DOCX import | Rust native (zip + roxmltree) | (no NPM crate; pure Rust, see `src-tauri/src/import/docx.rs`) |
 | PDF extraction | pdfplumber via sidecar | Python sidecar binary (see §3.2) |
 | PDF fallback | pdf.js | `pdfjs-dist` |
 | OCR fallback | Tesseract.js | `tesseract.js` |
@@ -116,7 +116,7 @@ lens/
 │   │   │   └── search.rs
 │   │   └── import/
 │   │       ├── txt.rs
-│   │       ├── docx.rs           # xmldom + jszip DOCX parser (renderer-driven)
+│   │       ├── docx.rs           # Rust-native DOCX extractor (zip + roxmltree)
 │   │       ├── pdf.rs            # Shells out to pdfplumber sidecar
 │   │       └── normalise.rs      # Text normalisation pipeline
 │   ├── sidecars/
@@ -549,9 +549,9 @@ Apply these steps in order to every extracted text, regardless of source format:
 
 1.2. **TXT import** (`src-tauri/src/import/txt.rs`). Read the file as UTF-8, run normalisation, store result. Set `file_format = 'txt'`, `extractor_id = 'plain-text-1.0'`.
 
-1.3. **DOCX import** (`src-tauri/src/import/docx.rs`). The renderer unzips the DOCX with `jszip`, parses `word/document.xml` with `@xmldom/xmldom`, concatenates the `<w:t>` text runs into a plain-text string, and passes that to Rust via the `raw_text` IPC param. Run normalisation. Set `file_format = 'docx'`, `extractor_id = 'xmldom-jszip-1'`.
+1.3. **DOCX import** (`src-tauri/src/import/docx.rs`). The Rust-side extractor unzips the DOCX with `zip`, parses `word/document.xml` with `roxmltree`, and walks `<w:r>` runs in `<w:p>` paragraphs of `<w:body>` to emit plain text. Paragraph boundaries become `\n`; run-internal line breaks (`<w:br/>`) become `\n`; tab markers (`<w:tab/>`) become `\t`. The `<w:t>` text is read with `xml:space="preserve"` honoured so authoring whitespace survives. Hidden runs (`<w:vanish/>`) and spell-check artefact runs (`<w:proofErr>`) are skipped. Run the result through the normalise pipeline. Set `file_format = 'docx'`, `extractor_id = 'lens-docx-1.0.0'`. The IPC `raw_text` parameter is retained as a renderer-side escape hatch but the canonical path is Rust-native.
 
-This is a deterministic OOXML→plain-text conversion: embedded images are ignored, tracked changes are accepted, comments are stripped, and footnotes are appended at the end with a separator. Non-Latin character sets (Arabic, Chinese, Devanagari) round-trip correctly because the parser works on the raw UTF-8 text strings embedded in the `<w:t>` elements.
+Known MVP limitations (documented in `docx.rs` itself): tracked changes (`<w:ins>` / `<w:del>`) are descended into but **accept/reject semantics are NOT applied** — both insertion and deletion text read as if accepted. Author/date metadata from `<w:ins>` / `<w:del>` does NOT survive. Top-level tables have their `<w:p>` paragraphs inlined into the body output stream, losing row/column structure. Footnotes, endnotes, and comment bodies live in `footnotes.xml` / `endnotes.xml` / `comments.xml` respectively — those files are never read, so the body text reaches the user but footnote/endnote/comment-body text is silently dropped. The output's character offset space approximates the live edit view but is NOT guaranteed to match NVivo or ATLAS.ti interpretations of the same source. Non-Latin character sets (Arabic, Chinese, Devanagari) round-trip correctly because the parser reads the raw UTF-8 text strings inside `<w:t>` elements.
 
 1.4. **PDF import** (`src-tauri/src/import/pdf.rs`). Two-path strategy:
 
