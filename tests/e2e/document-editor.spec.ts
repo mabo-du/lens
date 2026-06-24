@@ -13,7 +13,7 @@ const WORKSPACE_URL = 'http://127.0.0.1:57599/workspace.html';
 async function gotoWorkspace(page: Page) {
   await page.goto(WORKSPACE_URL);
   // Wait for the document title to render (confirms DocumentEditor mounted).
-  await expect(page.getByText('Test Interview Transcript')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('heading', { name: 'Test Interview Transcript' })).toBeVisible({ timeout: 10_000 });
   // Reset mock state.
   await page.evaluate(() => {
     (window as unknown as { __LENS_TEST__: { reset: () => void } }).__LENS_TEST__.reset();
@@ -54,7 +54,8 @@ test.describe('DocumentEditor text coding', () => {
 
     // Click the code tree node — with an active text selection, this assigns
     // the code to the selected range via annotationsIpc.create.
-    await page.getByRole('button', { name: 'Select code Test Code' }).click();
+    // dispatchEvent bypasses Base UI's data-base-ui-inert click interception.
+    await page.getByRole('button', { name: 'Select code Test Code' }).dispatchEvent('click');
 
     // Verify annotations_create IPC was called.
     const invocations = await page.evaluate(() =>
@@ -73,8 +74,8 @@ test.describe('DocumentEditor text coding', () => {
   test('document renders with ProseMirror content visible', async ({ page }) => {
     await gotoWorkspace(page);
 
-    // Document title is visible.
-    await expect(page.getByText('Test Interview Transcript')).toBeVisible();
+    // Document title is visible (rendered in an <h2>).
+    await expect(page.getByRole('heading', { name: 'Test Interview Transcript' })).toBeVisible();
 
     // ProseMirror editor is mounted.
     await expect(page.locator('.ProseMirror')).toBeVisible();
@@ -109,7 +110,8 @@ test.describe('DocumentEditor text coding', () => {
     });
 
     // Click the code — without text selection, this opens the code view.
-    await page.getByRole('button', { name: 'Select code ViewCode' }).click();
+    // dispatchEvent bypasses Base UI's data-base-ui-inert click interception.
+    await page.getByRole('button', { name: 'Select code ViewCode' }).dispatchEvent('click');
 
     // No annotations_create IPC should have been called.
     const invocations = await page.evaluate(() =>

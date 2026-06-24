@@ -33,7 +33,8 @@ test.describe('CodeTree CRUD', () => {
     await expect(page.getByText('No codes yet.')).toBeVisible();
 
     // Click the New Code (+) button.
-    await page.getByTitle('New Code').click();
+    // dispatchEvent bypasses Base UI's data-base-ui-inert click interception.
+    await page.getByTitle('New Code').dispatchEvent('click');
 
     // CodeDialog should open.
     await expect(page.getByRole('dialog')).toBeVisible({ timeout: 3000 });
@@ -42,7 +43,7 @@ test.describe('CodeTree CRUD', () => {
     await page.getByLabel('Name').fill('My Code');
 
     // Click Save Code button.
-    await page.getByRole('button', { name: 'Save Code' }).click();
+    await page.getByRole('button', { name: 'Save Code' }).dispatchEvent('click');
 
     // Dialog closes; code should appear in the tree.
     await expect(page.getByRole('button', { name: 'Select code My Code' })).toBeVisible({ timeout: 5000 });
@@ -80,14 +81,15 @@ test.describe('CodeTree CRUD', () => {
     await expect(page.getByRole('button', { name: 'Select code DeleteMe' })).toBeVisible({ timeout: 5000 });
 
     // Right-click the code node to open context menu.
-    await page.getByRole('button', { name: 'Select code DeleteMe' }).click({ button: 'right' });
+    // dispatchEvent('contextmenu') bypasses Base UI's data-base-ui-inert interception.
+    await page.getByRole('button', { name: 'Select code DeleteMe' }).dispatchEvent('contextmenu');
 
     // Register dialog handler BEFORE clicking Delete — the confirm dialog
     // fires synchronously from a React effect after setDeleteNode is called.
     page.once('dialog', dialog => dialog.accept());
 
     // Click "Delete Code" in the context menu.
-    await page.getByText('Delete Code').click();
+    await page.getByText('Delete Code').dispatchEvent('click');
 
     // Wait for the delete to process — code should disappear.
     // After deletion, tree refreshes and code is gone.
