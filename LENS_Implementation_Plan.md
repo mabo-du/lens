@@ -57,7 +57,7 @@ The app is named **LENS** — Local Ethnographic Narrative System. All configura
 |---|---|
 | `tauri.conf.json` `productName` | `LENS` |
 | Binary name | `lens` / `lens.exe` |
-| Bundle identifier | `org.heritagetech.lens` |
+| Bundle identifier | `org.mabo-du.lens` |
 | GitHub repository | `lens` |
 | Updater endpoint | `https://github.com/mabo-du/lens/releases/latest/download/latest.json` |
 | Project file extension | `.qdaproj` (format identifier; kept generic for REFI-QDA family recognition) |
@@ -475,10 +475,10 @@ cargo add tauri-plugin-sql tauri-plugin-dialog tauri-plugin-fs \
 
 0.3. In `tauri.conf.json`, configure:
 - `productName`: `LENS`
-- `identifier`: `org.heritagetech.lens`
+- `identifier`: `org.mabo-du.lens`
 - `tauri.security.csp`: strict CSP disabling remote script loading
 - `tauri.bundle.externalBin`: path to the pdfplumber sidecar binary
-- `tauri.updater`: endpoint `https://github.com/[owner]/lens/releases/latest/download/latest.json`
+- `tauri.updater`: endpoint `https://github.com/mabo-du/lens/releases/latest/download/latest.json`
 
 0.4. Implement the migration runner in `src-tauri/src/db/migrations.rs`. On every app launch, open the DB, read `schema_version`, and run any unapplied migration SQL files in order. Store migration SQL files as numbered constants embedded in the Rust binary (use `include_str!` macros).
 
