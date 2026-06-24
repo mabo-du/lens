@@ -89,10 +89,10 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: --target ${{ matrix.target }}
-          # NOTE: do NOT add `bundles: app` (or any single-bundle literal --
-          # e.g. `bundles: msi`) to this `with:` block. tauri-action forwards
-          # args verbatim to `tauri build`, and Tauri 2.x rejects invalid
-          # `--bundles <single-literal>` on the wrong host at parse time (the
-          # same class of failure the release-dry-run.sh fix closed).
-          # Limit bundle types per platform via scripts/release-dry-run.sh's
+          # NOTE: do NOT pass `--bundles <single-literal>` (e.g. `--bundles
+          # app`, `--bundles msi`) as part of this `with.args:` value.
+          # tauri-action forwards args verbatim to `tauri build`, and Tauri
+          # 2.x rejects invalid single-literal `--bundles` on the wrong host
+          # at parse time (same class of failure as the release-dry-run.sh
+          # fix). Limit bundle types per platform via scripts/release-dry-run.sh's
           # case statement (or extend tauri-action input), never via this arg.
