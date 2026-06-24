@@ -74,7 +74,7 @@ function UpdateBanner() {
         LENS <strong>{version}</strong> is available. {body}
       </span>
       <a
-        href="https://github.com/heritage-tech/lens/releases/latest"
+        href="https://github.com/mabo-du/lens/releases/latest"
         target="_blank"
         rel="noreferrer"
         className="underline hover:no-underline"
