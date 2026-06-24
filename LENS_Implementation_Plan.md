@@ -59,7 +59,7 @@ The app is named **LENS** — Local Ethnographic Narrative System. All configura
 | Binary name | `lens` / `lens.exe` |
 | Bundle identifier | `org.heritagetech.lens` |
 | GitHub repository | `lens` |
-| Updater endpoint | `https://github.com/[owner]/lens/releases/latest/download/latest.json` |
+| Updater endpoint | `https://github.com/mabo-du/lens/releases/latest/download/latest.json` |
 | Project file extension | `.qdaproj` (format identifier; kept generic for REFI-QDA family recognition) |
 
 ### 1.3 Repository Structure
@@ -828,7 +828,7 @@ Use Handlebars templates compiled at build time (not at runtime). Template file 
 
 5.4. **Cross-platform build and packaging.** Configure GitHub Actions using the official `tauri-action` workflow. The workflow triggers on version tags (`v*`). It builds for Windows (MSI + NSIS), macOS (DMG with universal binary for Intel + Apple Silicon), and Linux (AppImage + .deb). Code signing: generate a Tauri updater key pair via `tauri signer generate` and store the private key as a GitHub Actions secret. The public key goes in `tauri.conf.json`. macOS notarisation: add Apple credentials as GitHub Actions secrets per the `tauri-action` documentation.
 
-5.5. **Auto-update.** The Tauri updater plugin checks `https://github.com/[owner]/[repo]/releases/latest/download/latest.json` on app startup (once per day, not on every launch — implement a last-checked timestamp in app storage). When an update is available, show a non-intrusive banner at the bottom of the screen. Clicking "Update Now" downloads and installs the update.
+5.5. **Auto-update.** The Tauri updater plugin checks `https://github.com/mabo-du/lens/releases/latest/download/latest.json` on app startup (once per day, not on every launch — implement a last-checked timestamp in app storage). When an update is available, show a non-intrusive banner at the bottom of the screen. Clicking "Update Now" downloads and installs the update.
 
 **Checkpoint:** Build distributable installers for all three platforms from CI. Install on each platform. Open the sample project. Verify all Phase 1–4 features work in the installed build, not just in dev mode.
 

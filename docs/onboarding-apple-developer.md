@@ -14,7 +14,7 @@ or panic-mode debugging, see `docs/release-secrets.md` instead.
 | A working Mac running macOS 13 or later (Xcode 15+ ships the current `xcrun notarytool`). | — | — |
 | A paid Apple Developer Program enrolment ($99 USD/year, individual **or** organisation). Individual is fastest; organisation needs a D-U-N-S number and longer approval. | $99 USD/year | Individual: 24–48 h. Organisation: 5–10 days. |
 | An Apple ID with two-factor authentication enabled. | free | minutes. |
-| A GitHub repo admin (or write+secrets scope) on the upstream `heritage-tech/lens` repository. | — | — |
+| A GitHub repo admin (or write+secrets scope) on the upstream `mabo-du/lens` repository. | — | — |
 | ~30 minutes for the procedure end-to-end after enrolment approval. | — | ~30 min. |
 
 > **Note:** LENS currently distributes a *developer-id-notarised* `.app` bundle (Tauri defaults, no Mac App Store). If we later move to App Store distribution, the certificate type changes (`Apple Distribution` instead of `Developer ID Application`); see `docs/release-secrets.md` and the `### Apple notarisation` subsection for the rotation impact.
@@ -127,7 +127,7 @@ failed: invalid username/password`.
 
 ## Step 6 — Provision the seven GitHub-Actions secrets
 
-For each of the following secrets, open https://github.com/heritage-tech/lens/settings/secrets/actions
+For each of the following secrets, open https://github.com/mabo-du/lens/settings/secrets/actions
 (the repo need not be public-rated for this page), click **New repository
 secret**, paste the value, save. Do not commit any of these values.
 
@@ -141,7 +141,7 @@ secret**, paste the value, save. Do not commit any of these values.
 | `APPLE_ID` | your Apple Developer Program primary email |
 | `APPLE_PASSWORD` | the app-specific password from Step 5 |
 
-Run `gh secret list -R heritage-tech/lens` to validate all seven are present
+Run `gh secret list -R mabo-du/lens` to validate all seven are present
 without leaking their contents. *Note: `gh secret list` only confirms the
 names exist -- it does not confirm the values are correct.* For a value
 round-trip, smoke-test by triggering **`.github/workflows/release-dry-run.yml`**
@@ -189,7 +189,7 @@ or similar — that is acceptable; Steps 1–3 should still pass.
 
 ### Option B — GH Actions dry-run workflow
 
-Visit https://github.com/heritage-tech/lens/actions/workflows/release-dry-run.yml
+Visit https://github.com/mabo-du/lens/actions/workflows/release-dry-run.yml
 and click **Run workflow** (any branch). It runs the same six steps plus
 artefact upload, on `ubuntu-latest`. This is the canonical "all 7 secrets
 work" check — it cannot exercise macOS-specific signing/notarisation (those
@@ -244,7 +244,7 @@ Windows, macOS Intel, macOS Apple Silicon). macOS jobs will:
    `Releases/` fail signature verification for previously-installed users.
    **Fix:** see `### Apple notarisation` in `docs/release-secrets.md` — the
    Apple cert rotation workflow is *separate* from the Tauri signing key
-   rotation; track both with `gh secret list -R heritage-tech/lens`.
+   rotation; track both with `gh secret list -R mabo-du/lens`.
 
 6. **Keychain locked during CI.** GitHub Actions runners don't have a
    default keychain; you must `security create-keychain` a temp keychain,

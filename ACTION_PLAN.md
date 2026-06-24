@@ -105,7 +105,7 @@
 ### 1.6 [P0] Updater pubkey & endpoint must be real, or updater disabled
 
 - **Dependency:** none. Independently architecture decision.
-- **Scope:** `src-tauri/tauri.conf.json` has `"pubkey": ""` and a placeholder endpoint `https://github.com/[owner]/lens/releases/latest/download/latest.json`. Without a real Tauri updater keypair, signature verification will silently fail at every startup, blocking auto-update entirely.
+- **Scope:** `src-tauri/tauri.conf.json` has `"pubkey": ""` and a placeholder endpoint `https://github.com/mabo-du/lens/releases/latest/download/latest.json`. Without a real Tauri updater keypair, signature verification will silently fail at every startup, blocking auto-update entirely.
 - **Concrete change:**
   - **Recommended:** generate a keypair now via `cargo tauri signer generate -w ~/.tauri/lens.key.pem`, paste the public key into `tauri.conf.json` `plugins.updater.pubkey`, and store the private key in a CI secret (`TAURI_SIGNING_PRIVATE_KEY`) and locally only. Replace `[owner]` with the actual GitHub owner.
   - **Alternative:** leave the updater block as-is but **remove** `tauri-plugin-updater` from `Cargo.toml` and `main.rs` so the app doesn't waste cycles trying. Acknowledge "auto-update ships in v1.1" in the README.

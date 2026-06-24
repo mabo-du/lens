@@ -35,7 +35,7 @@ Open-source qualitative data analysis (QDA) for the desktop. Import documents, b
 ### Setup
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/mabo-du/lens.git
 cd lens
 npm install
 ```
