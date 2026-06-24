@@ -107,7 +107,7 @@
 - **Dependency:** none. Independently architecture decision.
 - **Scope:** `src-tauri/tauri.conf.json` has `"pubkey": ""` and a placeholder endpoint `https://github.com/mabo-du/lens/releases/latest/download/latest.json`. Without a real Tauri updater keypair, signature verification will silently fail at every startup, blocking auto-update entirely.
 - **Concrete change:**
-  - **Recommended:** generate a keypair now via `cargo tauri signer generate -w ~/.tauri/lens.key.pem`, paste the public key into `tauri.conf.json` `plugins.updater.pubkey`, and store the private key in a CI secret (`TAURI_SIGNING_PRIVATE_KEY`) and locally only. Replace `[owner]` with the actual GitHub owner.
+  - **Recommended:** generate a keypair now via `cargo tauri signer generate -w ~/.tauri/lens.key.pem`, paste the public key into `tauri.conf.json` `plugins.updater.pubkey`, and store the private key in a CI secret (`TAURI_SIGNING_PRIVATE_KEY`) and locally only. Replace `[owner]` with `mabo-du` (this LENS build's GitHub owner).
   - **Alternative:** leave the updater block as-is but **remove** `tauri-plugin-updater` from `Cargo.toml` and `main.rs` so the app doesn't waste cycles trying. Acknowledge "auto-update ships in v1.1" in the README.
 - **Files:** `src-tauri/tauri.conf.json`; optionally `src-tauri/Cargo.toml` and `src-tauri/src/main.rs` if disabling.
 - **Acceptance:** Either (a) `cargo build --release` + a CI-built artifact + the matching `latest.json` returns 200 to a check, OR (b) updater is fully removed from the binary.
@@ -326,7 +326,7 @@ These block forward motion until answered.
 | **CVS (`tauri-plugin-store`) or `localStorage`** for client-side prefs | `tauri-plugin-store` | 3.2 |
 | **`local_user` auto-create on `projects_create`** vs only at Settings dialog | auto-create | 1.5 + 3.2 |
 | **Repository owner for updater endpoint** | TBD | 1.6 |
-| **Mobile target** (`org.heritagetech.lens` suggests cross-platform) — keep `lib.rs` for mobile or remove? | remove (desktop-only) | 1.1 |
+| **Mobile target** (`org.mabo-du.lens` suggests cross-platform) — keep `lib.rs` for mobile or remove? | remove (desktop-only) | 1.1 |
 
 ---
 

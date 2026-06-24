@@ -1,0 +1,24 @@
+Project: Qualitative-Data-Analysis-App
+Source: Heritage_Tech_Tool_Specs.md — Tool 12 (Qualitative Data Analysis App)
+======================================================================
+
+CONTEXT:
+
+I am building a free, open-source qualitative data analysis (QDA) application for humanities and social science researchers — particularly archaeologists, historians, and anthropologists who currently rely on expensive proprietary tools like NVivo, ATLAS.ti, and MAXQDA, which are inaccessible to researchers in the Global South and unfunded academics. Before I begin development, I need a comprehensive technical and user research report covering the following:
+>
+> 1. **Feature benchmarking**: Produce a detailed feature comparison table covering NVivo, ATLAS.ti, MAXQDA, and the open-source tools Taguette, QualCoder, and RQDA. For each, cover: supported data types (text, audio, video, image), coding features, team collaboration, query/analysis tools, export formats, OS support, and pricing.
+>
+> 2. **REFI-QDA interchange standard**: What is the Rotterdam Exchange Format Initiative for QDA (REFI-QDA)? What file formats does it specify? Which tools currently support it? What is the technical specification for implementing it, and where is the schema documented?
+>
+> 3. **Researcher pain points**: Search academic forums, Reddit (r/qualitativeresearch, r/anthropology, r/GradSchool), and published articles for specific frustrations researchers have with current QDA tools. What features do they most want? What are the most common complaints about NVivo specifically?
+>
+> 4. **Text annotation architecture**: What are the best technical approaches for storing inline text annotations (highlights, tags) in a document that preserve stability when source text is re-imported? Compare character-offset approaches, XPath-based approaches, and hash-anchoring approaches. Which open-source libraries implement these well?
+>
+> 5. **Auto-coding with local LLMs**: Are there any existing open-source projects or published research that integrate local LLMs (e.g. via Ollama) with qualitative data coding? What prompting strategies have been proposed for automated code suggestion?
+>
+> 6. **Multilingual support needs**: Which languages are most underrepresented in current QDA tooling? What are the specific technical challenges for right-to-left script support, non-Latin character handling, and mixed-language transcript coding?
+>
+> Please provide specific GitHub repositories, academic paper citations, forum thread URLs, and technical specification links wherever possible.
+
+---
+---
