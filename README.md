@@ -1,4 +1,4 @@
-# LENS — Local Ethnographic Narrative System
+# LENS
 
 Open-source qualitative data analysis (QDA) for the desktop. Import documents, build a hierarchical code tree, annotate text passages, and export to REFI-QDA standards — all offline-first, with no cloud dependency.
 

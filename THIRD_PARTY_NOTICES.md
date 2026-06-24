@@ -20,9 +20,9 @@ upstream `LICENSE` files and may drift if any upstream changes its terms.
 | **ProseMirror editor stack** | `prosemirror-model` · `prosemirror-state` · `prosemirror-transform` · `prosemirror-view` | MIT |
 | **State + UI utilities** | `zustand` · `react-resizable-panels` · `react-arborist` · `sonner` · `cmdk` · `clsx` · `tailwind-merge` · `class-variance-authority` | MIT (cva: Apache-2.0 OR MIT dual) |
 | **Headless UI primitives** | `@base-ui/react` 1 | MIT |
-| **Icons + themes** | `lucide-react` · `next-themes` | lucide: ISC (verify per `npx license-checker --csv` — pre-`0.4xx` versions of lucide were MIT; the ISC switch is post-fork-and-version-jump); next-themes: MIT |
+| **Icons + themes** | `lucide-react` · `next-themes` | lucide: ISC; next-themes: MIT |
 | **File / data utilities** | `handlebars` 4 · `jszip` 3 · `@xmldom/xmldom` | MIT (all) |
-| **Geist variable font** | `@fontsource-variable/geist` 5 | SIL Open Font License 1.1 (OFL-1.1) — a font licence, not a software licence. See <https://scripts.sil.org/OFL> for redistribution terms: bundling is permitted; the font may not be sold standalone; derivative fonts cannot use "Geist" as a name (Reserved Font Name); **derivative fonts must themselves remain OFL-licensed** unless the entire superset font collection is relicensed freely. |
+| **Geist variable font** | `@fontsource-variable/geist` 5 | SIL OFL-1.1 (font licence) |
 
 ## Runtime — Rust (backend, inside `src-tauri`)
 
@@ -57,6 +57,41 @@ script via a frozen executable. Distribution channels:
 | **shadcn CLI** | `shadcn` 4 | MIT |
 | **Tauri CLI** | `@tauri-apps/cli` 2 | Apache-2.0 OR MIT (dual) |
 | **Type-only annotation metadata** | `@types/handlebars` · `@types/prosemirror-*` · `@types/xmldom` · `@types/node` · `@types/react` · `@types/react-dom` | MIT (DefinitelyTyped convention) |
+
+## Notes on specific licences
+
+The table above keeps licence tags terse so adjacent columns stay
+readable on small screens. Where a licence has clauses that specifically
+affect LENS's redistribution posture, they're spelled out here.
+
+### `lucide-react` (ISC)
+
+lucide-react is ISC-licensed in recent releases, but pre-`0.4xx` versions
+were MIT. The ISC switch is post-fork-and-version-jump, so attribution for
+older lockfiles may still expect MIT. Verify the actual licence of the
+pinned version before tagging any release:
+
+```bash
+npx license-checker --csv | grep '^"lucide-react'
+```
+
+### Geist variable font (SIL OFL-1.1)
+
+`@fontsource-variable/geist` ships under the SIL Open Font License 1.1,
+a **font** licence (not a software licence) — see
+<https://scripts.sil.org/OFL> for the authoritative redistribution
+terms. The clauses most likely to bite LENS's redistributors, in plain
+language:
+
+- Bundling the font into a software distribution is permitted.
+- The font may not be sold standalone.
+- Derivative fonts cannot use "Geist" as a name (**Reserved Font Name**).
+- Derivative fonts must themselves remain OFL-licensed unless the
+  entire superset font collection is relicensed freely.
+
+`sil --script-ofl` is a useful sanity check; for binary distributions
+the font `LICENSE.txt` should be bundled alongside the executable per
+the OFL redistribution clause.
 
 ## Pre-release verification
 
