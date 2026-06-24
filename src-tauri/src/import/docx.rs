@@ -3,9 +3,11 @@
 //! A `.docx` file is a ZIP archive whose root contains `word/document.xml`.
 //! This module extracts plain text from that XML using only the `zip` and
 //! `roxmltree` crates already in `Cargo.toml` — no Node-sidecar required for
-//! the MVP hot path. (Renderer-side Mammoth.js remains available as a fallback
-//! path for edge cases such as embedded images / tracked-change heavy
-//! documents.)
+//! the MVP hot path. The IPC `raw_text` parameter on `documents_import` is
+//! retained as a renderer-side escape hatch for any future alternative
+//! extractor; no Mammoth.js fallback is currently shipped (Mammoth was
+//! removed in the P4.3 dependency sweep and `package.json` carries no such
+//! dependency).
 //!
 //! Skipped XML nodes:
 //! - `<w:proofErr w:type="spellStart|spellEnd|gramStart|gramEnd">` —
