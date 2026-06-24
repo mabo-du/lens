@@ -206,7 +206,14 @@ async function waitForPort() {
   );
 }
 
-async function main() {
+// Round-84 NOTE: Playwright v1.61 contract — globalSetup / globalTeardown
+// must export a SINGLE default function. Earlier shapes (top-level script
+// with `async function main() { ... }` + `main().catch(...)`) were valid
+// node-cli patterns but rejected by Playwright with:
+//   `Error: tests/e2e/global-setup.mjs: file must export a single function.`
+// The root cause was that the path-fail fix in round-83 finally let
+// Playwright reach this file, exposing the latent shape bug.
+export default async function globalSetup() {
   const overallStart = Date.now();
   log('lens-e2e', `globalSetup entered — artifact log: ${path.relative(PROJECT_ROOT, LOG_FILE)}`);
   try {
@@ -220,11 +227,3 @@ async function main() {
     throw err;
   }
 }
-
-main().catch((e) => {
-  process.stderr.write(`[${ts()}] [lens-e2e] exiting with code=1\n`);
-  try {
-    appendFileSync(logFd, `[${ts()}] [lens-e2e] exiting with code=1\n`);
-  } catch {}
-  process.exit(1);
-});
