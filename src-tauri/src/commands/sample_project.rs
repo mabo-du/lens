@@ -2,7 +2,16 @@ use uuid::Uuid;
 
 use super::projects::{AppState, Project};
 
-/// Create a sample project with pre-built interview transcripts, codes, and annotations.
+/// Create a sample project with pre-built interview transcripts, codes, and
+/// annotations.
+///
+/// NOTE: The seed text below is a small set of **illustrative demo passages**
+/// written in-house to demonstrate the QDA workflow. They are NOT public-
+/// domain transcripts and NOT derived from any real interview subjects.
+/// Before a public v1 release, swap them for curated public-domain content
+/// (CC-licensed interviews, Project Gutenberg oral histories, etc.) and
+/// re-verify character-offset positions in the `annotations_data` vector
+/// below since the seed passages will change length and word distribution.
 pub async fn projects_create_sample_internal(
     state: &AppState,
     target_dir: String,

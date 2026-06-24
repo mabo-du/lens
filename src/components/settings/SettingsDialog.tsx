@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -9,6 +9,57 @@ import { useUiStore } from '@/store/uiStore';
 import { useProjectStore } from '@/store/projectStore';
 import { projectsIpc } from '@/ipc/projects';
 import { toast } from 'sonner';
+
+/**
+ * Persist app-wide settings (theme, default code color, recent projects) to
+ * a JSON file in the OS app-data directory via `@tauri-apps/plugin-store`.
+ *
+ * The display name is intentionally NOT in plugin-store: that's a project-
+ * scoped identity field that lives in the `local_user` table and is
+ * persisted via the `projectsIpc.localUserUpdateName` IPC call below.
+ *
+ * Returns null in non-Tauri contexts (vite dev in browser, vitest) so the
+ * UI behaves identically in both; calls silently fall through.
+ */
+async function loadAppSettings() {
+  try {
+    // `Store.load` is dynamic so vite / vitest don't have to evaluate the
+    // package at module-load time. The plugin only resolves inside a Tauri
+    // runtime; the catch handles non-Tauri contexts.
+    const { Store } = await import('@tauri-apps/plugin-store');
+    const store = await Store.load('lens-app-settings.json', {
+      autoSave: false,
+      // Pre-seed defaults so first-run users see a non-null theme + colour
+      // without picking one. Matches colorToArgb() fallback (#FF6366F1 -> #6366f1).
+      defaults: { theme: 'system', defaultCodeColor: '#6366f1' },
+    });
+    return {
+      theme: (await store.get<'light' | 'dark' | 'system'>('theme')) ?? null,
+      defaultCodeColor: (await store.get<string>('defaultCodeColor')) ?? null,
+    };
+  } catch {
+    return { theme: null, defaultCodeColor: null };
+  }
+}
+
+async function saveAppSetting<K extends 'theme' | 'defaultCodeColor'>(
+  key: K,
+  value: string,
+) {
+  try {
+    const { Store } = await import('@tauri-apps/plugin-store');
+    const store = await Store.load('lens-app-settings.json', {
+      autoSave: false,
+      // Pre-seed defaults so first-run users see a non-null theme + colour
+      // without picking one. Matches colorToArgb() fallback (#FF6366F1 -> #6366f1).
+      defaults: { theme: 'system', defaultCodeColor: '#6366f1' },
+    });
+    await store.set(key, value);
+    await store.save();
+  } catch {
+    // non-Tauri context: silently skip; UI state remains in-memory only
+  }
+}
 
 const PALETTE = [
   '#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6',
@@ -33,13 +84,37 @@ export function SettingsDialog({
   const [displayName, setDisplayName] = useState('');
   const [savingName, setSavingName] = useState(false);
 
+  const hydratedRef = useRef(false);
+
   useEffect(() => {
-    if (open && activeProject) {
+    if (!open || hydratedRef.current) return;
+    hydratedRef.current = true;
+    if (activeProject) {
       projectsIpc.localUserGetName()
         .then(setDisplayName)
         .catch(() => setDisplayName('Local User'));
     }
-  }, [open, activeProject]);
+    // Hydrate app-wide settings from plugin-store (theme, defaultCodeColor).
+    loadAppSettings().then((s) => {
+      if (s.theme) setTheme(s.theme);
+      if (s.defaultCodeColor) setDefaultCodeColor(s.defaultCodeColor);
+    });
+  }, [open, activeProject, setTheme, setDefaultCodeColor]);
+
+  const applyTheme = (newTheme: 'light' | 'dark' | 'system') => {
+    setTheme(newTheme);
+    void saveAppSetting('theme', newTheme);
+    const isDark =
+      newTheme === 'dark' ||
+      (newTheme === 'system' &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.classList.toggle('dark', isDark);
+  };
+
+  const applyDefaultCodeColor = (color: string) => {
+    setDefaultCodeColor(color);
+    void saveAppSetting('defaultCodeColor', color);
+  };
 
   const handleSaveName = async () => {
     const trimmed = displayName.trim();
@@ -58,14 +133,7 @@ export function SettingsDialog({
     }
   };
 
-  const applyTheme = (newTheme: 'light' | 'dark' | 'system') => {
-    setTheme(newTheme);
-    const isDark =
-      newTheme === 'dark' ||
-      (newTheme === 'system' &&
-        window.matchMedia('(prefers-color-scheme: dark)').matches);
-    document.documentElement.classList.toggle('dark', isDark);
-  };
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -136,7 +204,7 @@ export function SettingsDialog({
               {PALETTE.map((color) => (
                 <button
                   key={color}
-                  onClick={() => setDefaultCodeColor(color)}
+                  onClick={() => applyDefaultCodeColor(color)}
                   aria-pressed={defaultCodeColor === color}
                   aria-label={`Set default code color to ${color}`}
                   className={`w-7 h-7 rounded-full border-2 transition-all ${

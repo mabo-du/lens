@@ -23,6 +23,68 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { SettingsDialog } from '../settings/SettingsDialog';
 import { HelpDialog } from '../settings/HelpDialog';
 
+/**
+ * Auto-update banner shown in production builds. Dev (`npm run dev`) renders
+ * nothing because Tauri is not embedded in the browser. The check is
+ * throttled to once per day via `localStorage['lens:update:last-checked']`
+ * to avoid hitting the GitHub releases endpoint on every launch.
+ *
+ * Prompts the user to the GitHub releases page rather than triggering an
+ * in-app download flow — that's deliberate: the updater plugin's
+ * `update-and-install` flow needs a configured `bundle.updater` with a
+ * real signing pubkey, which the MVP doesn't ship (see
+ * `.env.example` + `AGENTS.md` → Release Secrets).
+ */
+function UpdateBanner() {
+  const [version, setVersion] = useState<string | null>(null);
+  const [body, setBody] = useState<string>('');
+
+  useEffect(() => {
+    if (!import.meta.env.PROD) return;
+    const LAST = 'lens:update:last-checked';
+    const last = Number(localStorage.getItem(LAST) ?? '0');
+    const oneDay = 24 * 60 * 60 * 1000;
+    if (Date.now() - last < oneDay) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { check } = await import('@tauri-apps/plugin-updater');
+        const u = await check();
+        if (cancelled || !u?.available) return;
+        setVersion(u.version ?? null);
+        setBody(u.body ?? '');
+        localStorage.setItem(LAST, String(Date.now()));
+      } catch {
+        // offline or signed manifest unreachable — silently skip
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!version) return null;
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="bg-amber-100 border-b border-amber-200 text-amber-900 px-4 py-2 text-sm flex items-center justify-between gap-3"
+    >
+      <span>
+        LENS <strong>{version}</strong> is available. {body}
+      </span>
+      <a
+        href="https://github.com/heritage-tech/lens/releases/latest"
+        target="_blank"
+        rel="noreferrer"
+        className="underline hover:no-underline"
+      >
+        View release
+      </a>
+    </div>
+  );
+}
+
 function TopNav({ onJournalOpen, onCloseProject, onSettingsOpen, onHelpOpen, onImportQdpx }: { onJournalOpen: () => void; onCloseProject: () => void; onSettingsOpen: () => void; onHelpOpen: () => void; onImportQdpx?: () => void }) {
   const activeProject = useProjectStore(s => s.activeProject);
   const setActiveProject = useProjectStore(s => s.setActiveProject);
@@ -303,6 +365,7 @@ export function Workspace({ onImportQdpx }: { onImportQdpx?: () => void }) {
   return (
     <div className="flex flex-col h-screen w-full bg-slate-100 font-sans">
       <TopNav onJournalOpen={() => setJournalOpen(true)} onCloseProject={handleCloseProject} onSettingsOpen={() => setSettingsOpen(true)} onHelpOpen={() => setHelpOpen(true)} onImportQdpx={onImportQdpx} />
+      <UpdateBanner />
       <Group
         onLayoutChanged={(sizes) => {
           // react-resizable-panels v4 passes sizes as a Record<string, number>
