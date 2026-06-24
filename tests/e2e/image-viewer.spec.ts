@@ -150,13 +150,18 @@ test.describe('ImageViewer polygon mode', () => {
       await expect(page.getByTestId('region-action-edit-memo')).toBeVisible({ timeout: 1000 });
     }).toPass({ timeout: 5000 });
 
-    // Click Edit Memo... → RegionMemoDialog should open with the code's name in the header.
-    // { force: true } bypasses actionability checks during Base UI's 100ms
-    // dialog entrance animation, which can cause the click to be intercepted
-    // by the inert #root div (data-base-ui-inert).
-    await page.getByTestId('region-action-edit-memo').click({ force: true });
-    // RegionMemoDialog is the same Dialog primitive; we look for its title.
-    await expect(page.getByText('Region Memo')).toBeVisible({ timeout: 3000 });
+    // Click Edit Memo... → RegionMemoDialog should open with the code's name.
+    // Wait 150ms for the action dialog's 100ms entrance animation to settle
+    // (Base UI zoom-in-95), then click normally. Without the wait, the moving
+    // button can cause Playwright actionability to hit the inert #root div.
+    await page.waitForTimeout(150);
+    await page.getByTestId('region-action-edit-memo').click();
+    // Retry-only the visibility check — the click is a one-shot action that
+    // closes the action Dialog and opens the RegionMemoDialog in one batch
+    // render; it cannot be re-clicked. A generous timeout absorbs the render.
+    await expect(async () => {
+      await expect(page.getByText('Region Memo')).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 5000 });
     // The "For code: <name>" sub-line shows the polygon code's name.
     await expect(page.getByText('Test Code', { exact: true })).toBeVisible();
   });
