@@ -149,17 +149,13 @@ pub async fn documents_import_internal(
         }
         (None, "png" | "jpg" | "jpeg") => {
             // Image: hash file bytes for content dedup; no extracted
-            // text. The duplicate-check SELECT below matches against
-            // text_hash, which now holds the file-bytes hash for
-            // images — semantically equivalent (content dedup) without
-            // requiring a schema change.
+            // text. After migration 05_relax_plain_text, the
+            // `document.plain_text` column is NULL-able so we bind None
+            // directly. FTS5 sync triggers handle the NULL via
+            // COALESCE(plain_text, '') on their side.
             let meta = image_import::extract_metadata(Path::new(&file_path))?;
             Extracted {
-                // Image plain_text is Some("") (not None) because the
-                // `document.plain_text` column is NOT NULL on the schema.
-                // Future migration (after image-region certification) can
-                // relax this and switch to Some("") -> None.
-                plain_text: Some(String::new()),
+                plain_text: None,
                 text_hash: meta.content_hash,
                 extractor_id: IMAGE_EXTRACTOR_ID,
                 word_count: 0,

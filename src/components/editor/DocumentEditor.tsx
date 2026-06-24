@@ -11,6 +11,7 @@ import { annotationsIpc } from '@/ipc/annotations';
 import { documentsIpc } from '@/ipc/documents';
 import { AnnotationMemoDialog } from '../memos/AnnotationMemoDialog';
 import { toast } from 'sonner';
+import { ImageViewer } from './ImageViewer';
 
 import 'prosemirror-view/style/prosemirror.css';
 
@@ -172,34 +173,13 @@ export function DocumentEditor() {
     );
   }
 
-  // Phase C MVP placeholder for image documents. The full Konva-based
-  // viewer with region drawing lands in round-71 (Phase C-2). For now
-  // we surface the document title + intrinsic dimensions + the asset
-  // filename so researchers can confirm the import succeeded.
+  // Phase C-2: image documents now render through the Konva-backed
+  // ImageViewer (drag-to-create bbox regions, code picker, region list,
+  // right-click to delete). The Tauri command handlers store them as
+  // `selection` rows with `selection_type='image_region'` plus an
+  // `image_selection` extension row holding the 0..1 bbox coords.
   if (isImageDocument) {
-    return (
-      <div className="flex h-full flex-col bg-white">
-        <div className="px-6 py-4 border-b border-slate-200">
-          <h2 className="text-xl font-semibold text-slate-800">{document.title}</h2>
-          <p className="text-xs text-slate-500 mt-1">
-            {document.intrinsicW != null && document.intrinsicH != null
-              ? `${document.intrinsicW} \u00d7 ${document.intrinsicH} px \u00b7 image document`
-              : 'image document'}
-          </p>
-        </div>
-        <div className="flex-1 flex items-center justify-center p-8 bg-slate-50">
-          <div className="max-w-md text-center space-y-3">
-            <svg className="w-16 h-16 mx-auto text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            <p className="text-base font-medium text-slate-700">Image viewer coming in v0.1.1</p>
-            <p className="text-sm text-slate-500 leading-relaxed">
-              The bitmap has been imported and stored in the project&apos;s <code className="px-1 py-0.5 rounded bg-slate-200 text-slate-700 text-xs">assets/</code> folder with intrinsic dimensions recorded for region annotations (Phase D). The full canvas viewer lands in the next release.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
+    return <ImageViewer document={document} />;
   }
 
   return (

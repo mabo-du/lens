@@ -1,5 +1,6 @@
 use super::import::Document;
 use super::projects::AppState;
+use serde::Serialize;
 use tauri::{command, AppHandle, State};
 
 pub async fn document_delete_internal(state: &AppState, id: String) -> Result<(), String> {
@@ -63,6 +64,69 @@ pub async fn document_delete(
     id: String,
 ) -> Result<(), String> {
     document_delete_internal(&state, id).await
+}
+
+#[derive(Debug, Serialize)]
+pub struct DocumentAsset {
+    /// base64-encoded PNG/JPG/JPEG bytes read from the project's assets dir.
+    pub b64: String,
+    /// MIME type for reconstructing a data URL on the renderer: `image/png` | `image/jpeg`.
+    pub mime: String,
+}
+
+/// Read a viewable image asset (PNG/JPG/JPEG) for the given document.
+/// Rejects non-image formats so a stray call on a txt/docx/pdf document
+/// surfaces an error rather than shipping arbitrary bytes.
+#[command]
+pub async fn document_get_asset_base64(
+    state: State<'_, AppState>,
+    document_id: String,
+) -> Result<DocumentAsset, String> {
+    use base64::{engine::general_purpose, Engine as _};
+
+    let pool_guard = state.db.read().await;
+    let pool = pool_guard.as_ref().ok_or("No project open")?;
+
+    let (file_format, original_path): (String, Option<String>) = sqlx::query_as(
+        "SELECT file_format, original_path FROM document WHERE id = ?",
+    )
+    .bind(&document_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| e.to_string())?
+    .ok_or_else(|| format!("Document not found: {}", document_id))?;
+
+    let mime = match file_format.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        other => {
+            return Err(format!(
+                "Document {} is not a viewable image (file_format={})",
+                document_id, other
+            ))
+        }
+    };
+
+    let folder_guard = state.project_folder.read().await;
+    let folder = folder_guard.as_ref().ok_or("No project folder open")?;
+
+    // Match the naming convention used by documents_import_internal's
+    // assets/ copy: <id>.<ext> where ext is derived from original_path
+    // and falls back to file_format if no path was captured.
+    let ext = original_path
+        .as_deref()
+        .and_then(|p| std::path::Path::new(p).extension())
+        .and_then(|e| e.to_str())
+        .unwrap_or(file_format.as_str());
+    let asset_path = folder.join("assets").join(format!("{}.{}", document_id, ext));
+
+    let bytes = std::fs::read(&asset_path)
+        .map_err(|e| format!("Failed to read asset {:?}: {}", asset_path, e))?;
+
+    Ok(DocumentAsset {
+        b64: general_purpose::STANDARD.encode(&bytes),
+        mime: mime.to_string(),
+    })
 }
 
 #[command]

@@ -89,10 +89,28 @@ No surface features change from rc.1.
   secret prerequisites, and the inline SHA-bump procedure so future
   maintainers don't repeat the rc.1 matrix failure.
 
+## [0.1.1] - 2026-06-24
+
+Dependable image-doc UX: Konva-powered image viewer with drag-to-create bbox regions. The projected v0.1.1 plan ships in this release line (plan subset: viewer + bbox regions; polygon and memos-on-region rolled into v0.2).
+
+### Added
+- **Image-viewer + region drawing** — new `ImageViewer.tsx` mounts in `DocumentEditor` when `document.file_format` is `png`/`jpg`/`jpeg`. Renders the bitmap at its intrinsic width/height via react-konva, lets the researcher pick a code from the project tree, and drag-draws a bounding-box Rect on mouseup. Coordinates normalised to 0..1 at the IPC boundary so REFI-QDA AreaReference export can use them verbatim.
+- **Migration 05 — `plain_text` nullable** — 12-step `CREATE TABLE _new` schema rebuild relaxes the NOT NULL constraint on `document.plain_text`. The prior round-70 attempt at `ALTER COLUMN ... DROP NOT NULL` broke 34/53 integration tests on the bundled SQLite ("unsupported ALTER TABLE" path); this rebuild is portable across every reasonable SQLite ≥ 3.7 since it relies only on native CREATE / INSERT / DROP / ALTER RENAME. FTS5 sync triggers recreated with `COALESCE(plain_text, '')` so image rows with NULL don't break full-text search.
+- **Image-region IPC** — three new Tauri commands: `image_selection_create` (with bbox coord validation: rejects NaN/Infinity, out-of-range, zero-area, non-strict rectangles), `image_selection_list_by_document`, `image_selection_delete`. All wrapped in transactions; the `selection` parent row + `image_selection` extension row are inserted atomically.
+- **Document-asset IPC** — `document_get_asset_base64` reads the bitmap from `assets/<id>.<ext>` on disk and returns a base64-encoded payload + MIME type so the renderer can construct a `data:image/png;base64,...` URL. Rejects non-png/jpg/jpeg formats at the dispatcher.
+- **Frontend stack addition** — adds `konva` (10.x) + `react-konva` (19.x) to package.json.
+
+### Changed
+- **Image-import dispatcher** — `commands/import.rs` image branch now binds `plain_text: None` directly (vs the round-70 fallback to `Some("")`); combined with migration 05, this is the canonical post-cut path.
+
+### Tests
+- `image_selection_bbox_round_trip` — assert insert → SELECT (JOIN) → delete via FK cascade.
+- `migration_05_relaxes_plain_text` — assert a row can be inserted with NULL `plain_text` and the value round-trips (closes the round-70 regression violation that originally broke 34 of 53 tests).
+
 ## [Unreleased]
 
-### Planned for v0.1.1
-- Konva-based image viewer with region-drawing canvas
-- SQLite-level region annotations for image documents (Phase D)
+### Planned for v0.2
+- Polygon/freehand region drawing (currently bbox only)
 - Memos-on-region binding (cross-document annotation memos)
 - Konva vs custom-canvas performance benchmarking under WSL/Raspberry Pi 4
+- Apple-signing release.yml matrix verification + GA cut
