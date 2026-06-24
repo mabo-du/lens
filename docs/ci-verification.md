@@ -125,6 +125,53 @@ artifact log. Look for:
 - Fixture import resolution → check `tests/e2e/fixture.vite.config.ts`
   alias `@` → `src/`
 
+### Symptom: every job fails in <2 s with no logs + no artifacts
+
+**Observed in the round-79 follow-on commit `fdb4d89` (run
+ID `28087825705` on 2026-06-24).** Diagnostic signature:
+
+- All ran jobs conclude `failure` within ~2 seconds of run creation
+- `gh api /repos/<org>/<repo>/actions/runs/<id>/jobs` shows
+  `runner_id: 0` and `runner_name: ""` for every failed job
+- `gh api /repos/<org>/<repo>/actions/jobs/<id>/logs` returns
+  `404 BlobNotFound` (zero log content ever written)
+- `gh api /repos/<org>/<repo>/actions/runs/<id>/artifacts` returns
+  `{"total_count": 0, "artifacts": []}` (upload steps never ran)
+- Downstream jobs (those with `needs:`) report `skipped` correctly
+
+This pattern is diagnostic of the GitHub Actions hosted-runner
+billing/quota cap firing **at job allocation time** — not on the
+runner, not from a queue timeout, not from YAML parse failure, not
+from concurrency cancel. Jobs are created in the workflow graph but
+fail the billing check before any runner is ever assigned.
+
+**Cannot be worked around from CI YAML or the codebase.** Recovery
+options, in order of preference:
+
+1. **Top up the GitHub Actions spending limit** at
+   `https://github.com/settings/billing/plans` (or via the org's
+   billing page if this is an organisation-owned repo).
+2. **Replace `runs-on: ubuntu-latest` with a pinned
+   `runs-on: ubuntu-22.04`** if GitHub has reserved a quota for
+   pinned minor-version labels (rare but possible on paid plans).
+3. **Self-host a runner** at `/settings/actions/runners/new` so the
+   jobs execute on your own hardware, bypassing GitHub's hosted
+   quota entirely. The job YAML stays the same.
+4. **Wait until the next billing cycle** and re-push to trigger
+   another attempt — the symptom does not auto-recover.
+
+To reproduce the diagnostic from the CLI:
+
+```bash
+RUN_ID=$(gh run list --workflow=ci.yml --branch=main --limit=1 \
+          --json databaseId --jq '.[0].databaseId')
+gh api /repos/<org>/<repo>/actions/runs/${RUN_ID}/jobs \
+  --jq '.jobs[] | select(.conclusion=="failure")
+       | {name: .name, runner_id: .runner_id, runner_name: .runner_name}'
+gh api /repos/<org>/<repo>/actions/runs/${RUN_ID}/artifacts \
+  --jq '.total_count'   # should be > 0 for a healthy run
+```
+
 ### Symptom: one specific test fails
 
 Check `test-results/<test-name>-chromium/error-context.md` — Playwright
