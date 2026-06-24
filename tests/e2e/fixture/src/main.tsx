@@ -189,7 +189,7 @@ const invoke = async (cmd: string, args: unknown): Promise<unknown> => {
 // 2. Project store seed  (must precede any component reads usesProjectStore)
 // ---------------------------------------------------------------------------
 
-import { useProjectStore } from '../../../src/store/projectStore';
+import { useProjectStore } from '@/store/projectStore';
 useProjectStore.setState({
   activeProject: mockFixture.projects[0],
   codes: mockFixture.codes,
@@ -202,8 +202,8 @@ useProjectStore.setState({
 // 3. Mount ImageViewer
 // ---------------------------------------------------------------------------
 
-import { ImageViewer } from '../../../src/components/editor/ImageViewer';
-import type { DocumentRecord } from '../../../src/ipc/documents';
+import { ImageViewer } from '@/components/editor/ImageViewer';
+import type { DocumentRecord } from '@/ipc/documents';
 
 const fixtureDoc = mockFixture.documents[0] as DocumentRecord;
 
