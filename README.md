@@ -113,19 +113,26 @@ the `security find-identity` snippet) live in
 `.github/workflows/release.yml` and `release-dry-run.yml` pin every
 third-party action to a specific commit SHA so workflow behaviour is
 reproducible across Renovate-style dependency rollers. When a new tagged
-release of an upstream action is needed, update the SHA inline (look up
-the correct SHA via `git ls-remote https://github.com/<owner>/<repo>.git
-refs/tags/<tag>` or `curl https://api.github.com/repos/<owner>/<repo>/git/
-refs/tags/<tag>`) and update the trailing `# <version>` comment in the
-same edit.
+release of an upstream action is needed, run
+`scripts/refresh-release-sha-pins.sh` to diff the current pins against
+the latest GitHub refs, then re-run with `--apply` to write the new SHAs
+back to disk after a confirmation prompt.
 
-When bumping, refresh:
+The script targets:
 - `actions/checkout` (latest stable tag)
 - `actions/setup-node` (latest stable tag)
 - `actions/setup-python` (release-dry-run.yml only)
 - `dtolnay/rust-toolchain` (refs/heads/stable)
 - `tauri-apps/tauri-action` (rolling `v0` tag)
 - `actions/upload-artifact` (release-dry-run.yml only)
+
+If the GitHub API rate-limits you and `jq` returns nothing, fall back to
+a manual lookup with `git ls-remote https://github.com/<owner>/<repo>.git
+refs/tags/<tag>` (or `curl
+https://api.github.com/repos/<owner>/<repo>/git/refs/tags/<tag>`), then
+update both the inline SHA and the trailing `# <version>` comment in
+the same edit so future maintainers don't have to re-discover the
+version mapping.
 
 ## License
 
