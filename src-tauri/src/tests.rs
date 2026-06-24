@@ -2251,3 +2251,100 @@ async fn document_get_asset_base64_rejects_non_image() {
         "txt doc must NOT match the image-format whitelist; the IPC would return Err"
     );
 }
+
+// ============================================================
+// v0.2 integration tests — image polygon IPC + migration 06
+// ============================================================
+
+/// Validates the image_polygon schema path works end-to-end:
+/// insert a `selection` parent + `image_polygon` extension row inside
+/// an explicit transaction, query back via SELECT JOIN, then delete
+/// via cascade and assert the row goes away.
+#[tokio::test]
+async fn image_selection_polygon_round_trip() {
+    let tmp = tempdir().expect("tempdir");
+    let db_path = tmp.path().join("test.qdaproj");
+    let pool = db::init_db(&db_path, None).await.expect("init_db");
+
+    sqlx::query("INSERT INTO project (id, name) VALUES (?, ?)")
+        .bind("proj-polygon-roundtrip")
+        .bind("Polygon Round Trip")
+        .execute(&pool)
+        .await
+        .expect("seed project");
+    sqlx::query("INSERT INTO code (id, project_id, name, color) VALUES (?, ?, ?, ?)")
+        .bind("code-polygon")
+        .bind("proj-polygon-roundtrip")
+        .bind("Polygon")
+        .bind("#00ff00")
+        .execute(&pool)
+        .await
+        .expect("seed code");
+
+    let doc_id = "doc-polygon";
+    sqlx::query(
+        "INSERT INTO document (id, project_id, title, file_format, plain_text, text_hash, extractor_id) \
+         VALUES (?, ?, ?, ?, NULL, ?, ?)",
+    )
+    .bind(doc_id)
+    .bind("proj-polygon-roundtrip")
+    .bind("polygon-doc.png")
+    .bind("png")
+    .bind("placeholder-hash")
+    .bind("test-fixture")
+    .execute(&pool)
+    .await
+    .expect("seed document");
+
+    let sel_id = "sel-polygon-1";
+    let vertices_json = "[[0.1,0.1],[0.9,0.1],[0.5,0.9]]";
+
+    let mut tx = pool.begin().await.expect("begin");
+    sqlx::query(
+        "INSERT INTO selection (id, document_id, code_id, selection_type) VALUES (?, ?, ?, 'image_polygon')",
+    )
+    .bind(sel_id)
+    .bind(doc_id)
+    .bind("code-polygon")
+    .execute(&mut *tx)
+    .await
+    .expect("insert selection");
+
+    sqlx::query(
+        "INSERT INTO image_polygon (selection_id, vertices_json) VALUES (?, ?)",
+    )
+    .bind(sel_id)
+    .bind(vertices_json)
+    .execute(&mut *tx)
+    .await
+    .expect("insert image_polygon");
+    tx.commit().await.expect("commit");
+
+    let rows: Vec<(String, String)> = sqlx::query_as(
+        "SELECT s.id, p.vertices_json \
+         FROM selection s JOIN image_polygon p ON p.selection_id = s.id \
+         WHERE s.document_id = ?",
+    )
+    .bind(doc_id)
+    .fetch_all(&pool)
+    .await
+    .expect("list polygons");
+    assert_eq!(rows.len(), 1, "one polygon should exist");
+    assert_eq!(rows[0].0, sel_id);
+    assert_eq!(rows[0].1, vertices_json);
+
+    sqlx::query("DELETE FROM selection WHERE id = ?")
+        .bind(sel_id)
+        .execute(&pool)
+        .await
+        .expect("delete selection");
+
+    let rows_after: Vec<(String,)> = sqlx::query_as(
+        "SELECT selection_id FROM image_polygon WHERE selection_id = ?",
+    )
+    .bind(sel_id)
+    .fetch_all(&pool)
+    .await
+    .expect("list after delete");
+    assert!(rows_after.is_empty(), "image_polygon row should be cascaded");
+}
