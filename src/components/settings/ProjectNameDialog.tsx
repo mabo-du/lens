@@ -18,8 +18,9 @@ import { validateProjectNameClient } from '@/lib/validation';
  * Rust side so the user gets immediate feedback before submitting:
  *   - Must not be empty (after trim).
  *   - Must be 64 characters or fewer.
- *   - Must not contain path traversal segments (`..` / `.`).
- *   - Must not be an absolute path (`/`).
+ *   - Must not start any segment with '.'.
+ *   - Must not end with a path separator.
+ *   - Must not be an absolute path (`/` or Windows drive letter).
  *   - Allowed characters: A-Z, a-z, 0-9, space, dot, underscore, hyphen.
  *
  * The Rust side re-validates on submit; these checks are purely UX.
