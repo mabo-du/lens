@@ -239,6 +239,18 @@ jobs:
           ls -la dist
 
       - name: Publish to PyPI (OIDC trusted-publishing)
+        # IMPORTANT: pypa/gh-action-pypi-publish@v1.14.0 is intentionally
+        # strict about duplicate versions. If `lens-qda==X` is already on
+        # PyPI (e.g., uploaded by an earlier, successful tag push), a
+        # re-tag-force-push of the same tag will FAIL this step with a
+        # 400 `File already exists` from PyPI's JSON upload API. This is
+        # expected, NOT a regression. The wheel already on PyPI is what
+        # users will download. To publish a new version: bump the
+        # version stamp (CHANGELOG entry + package.json + tauri.conf.json
+        # + src-tauri/Cargo.toml version), commit, and create a FRESH
+        # annotated tag (e.g. v0.2.0). Re-uploading a manually-deleted
+        # version via twine is the only escape hatch if you ever need to
+        # overwrite a specific version stamp on PyPI.
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
         with:
           packages-dir: python/dist
