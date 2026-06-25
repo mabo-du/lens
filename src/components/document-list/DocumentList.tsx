@@ -1,11 +1,20 @@
 
 import { useProjectStore } from '@/store/projectStore';
 import { useUiStore } from '@/store/uiStore';
-import { FileText, File, FileType2, Trash2, Image } from 'lucide-react';
+import { FileText, File, FileType2, Trash2, Image, ScanLine } from 'lucide-react';
 import { toast } from 'sonner';
 import { useState } from 'react';
 import { documentsIpc, DocumentRecord } from '@/ipc/documents';
 import { open } from '@tauri-apps/plugin-dialog';
+import { convertFileSrc } from '@tauri-apps/api/core';
+import { runOcr } from './ocrClient';
+import { TESSERACT_JS_EXTRACTOR_ID } from './ocrWorker';
+
+// TESSERACT_JS_EXTRACTOR_ID is derived at build time from the
+// `version` export of the `tesseract.js` package (see ocrWorker.ts),
+// so a `package.json` bump propagates automatically instead of
+// silently drifting from the actual runtime version.
+export { TESSERACT_JS_EXTRACTOR_ID };
 
 export function DocumentList() {
   const documents = useProjectStore(s => s.documents);
@@ -16,6 +25,7 @@ export function DocumentList() {
 
   const removeDocument = useProjectStore(s => s.removeDocument);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [ocrPendingFile, setOcrPendingFile] = useState<string | null>(null);
 
   const handleDeleteDocument = async (docId: string, title: string) => {
     if (!confirm(`Delete "${title}"? This will also delete all associated annotations.`)) return;
@@ -48,6 +58,53 @@ export function DocumentList() {
       case 'jpeg':
         return <Image className="w-4 h-4 text-purple-500" />;
       default: return <File className="w-4 h-4 text-slate-500" />;
+    }
+  };
+
+  /**
+   * Phase 1 OCR fallback path for image files (.png/.jpg/.jpeg).
+   *
+   * Reads the image bytes via Tauri's `convertFileSrc` (so the asset
+   * is reachable from the renderer's local origin — the CSP'd context
+   * blocks raw filesystem reads directly), runs Tesseract.js in a
+   * module Web Worker, and forwards the recognised text to the
+   * Rust-side `documents_import` with `fileFormat: 'ocr_pdf'` and
+   * `extractorIdOverride` matching the Rust validator regex.
+   *
+   * Scope note (v0.1.4): PDF OCR is intentionally NOT wired here.
+   * PDF page rendering (`pdf -> image`) requires `pdfjs-dist` which
+   * is a v0.1.5+ dependency; the canonical PDF path remains the
+   * Rust pdfplumber sidecar.
+   */
+  const handleOcrImageImport = async (imagePath: string) => {
+    if (!activeProject) return;
+    if (!confirm(
+      'Run Tesseract.js OCR on this image and import as an `ocr_pdf` document?\n\n' +
+      'The original image file is still copied to assets/ unchanged. ' +
+      'Only the extracted text becomes searchable / codable.',
+    )) {
+      return;
+    }
+    setOcrPendingFile(imagePath);
+    try {
+      const imageUrl = convertFileSrc(imagePath);
+      toast.info('Running Tesseract.js OCR...');
+      const { text } = await runOcr(imageUrl);
+      toast.success(`OCR complete (${text.length} chars)`);
+      const doc = await documentsIpc.import({
+        projectId: activeProject.id,
+        filePath: imagePath,
+        fileFormat: 'ocr_pdf',
+        rawText: text,
+        extractorIdOverride: TESSERACT_JS_EXTRACTOR_ID,
+      } as Parameters<typeof documentsIpc.import>[0]);
+      addDocuments([doc]);
+      setActiveDocument(doc.id);
+    } catch (e) {
+      console.error(`OCR failed for ${imagePath}:`, e);
+      toast.error(`OCR failed: ${e}`);
+    } finally {
+      setOcrPendingFile(null);
     }
   };
 
@@ -108,6 +165,24 @@ export function DocumentList() {
           className="text-xs bg-slate-200 hover:bg-slate-300 text-slate-800 px-2 py-1 rounded transition-colors"
         >
           Import
+        </button>
+        <button
+          title="Run Tesseract.js OCR on an image file and import as ocr_pdf"
+          onClick={async () => {
+            if (!activeProject) return;
+            const files = await open({
+              multiple: false,
+              filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg'] }],
+            });
+            if (!files) return;
+            const filePath = Array.isArray(files) ? files[0] : files;
+            await handleOcrImageImport(filePath);
+          }}
+          disabled={ocrPendingFile !== null}
+          className="text-xs bg-orange-100 hover:bg-orange-200 text-orange-800 px-2 py-1 rounded transition-colors flex items-center gap-1 disabled:opacity-50"
+        >
+          <ScanLine className="w-3 h-3" />
+          {ocrPendingFile ? 'OCR...' : 'OCR'}
         </button>
       </div>
       

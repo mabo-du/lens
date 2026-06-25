@@ -88,11 +88,71 @@ mod tests {
         assert_eq!(result, "a\n\nb");
     }
 
+    /// **Regression:** assert that the ligature-expansion branch in
+    /// `normalise_text` step 4 actually fires. The previous edition
+    /// of this test passed non-ligature input, so it was a no-op
+    /// pass-through. This edition feeds the actual Latin ligature
+    /// codepoints U+FB01 / U+FB03 / U+FB04 / U+FB05 / U+FB06.
     #[test]
     fn test_normalise_text_ligatures() {
-        let raw = "fi fi ffi ffl st";
-        let result = normalise_text(raw);
-        assert_eq!(result, "fi fi ffi ffl st");
+        // U+FB01..FB06 encoded as hex-escaped byte strings so the
+        // test file itself stays pure ASCII.
+        let raw = [
+            std::str::from_utf8(b"\xEF\xAC\x81").unwrap(), // U+FB01 fi
+            std::str::from_utf8(b"\xEF\xAC\x83").unwrap(), // U+FB03 ffi
+            std::str::from_utf8(b"\xEF\xAC\x84").unwrap(), // U+FB04 ffl
+            std::str::from_utf8(b"\xEF\xAC\x85").unwrap(), // U+FB05 st
+            std::str::from_utf8(b"\xEF\xAC\x86").unwrap(), // U+FB06 st
+        ].concat();
+        let result = normalise_text(&raw);
+        assert_eq!(
+            result, "fiffifflstst",
+            "ligature expansion must produce fi+ffi+ffl+st+st, got: {:?}",
+            result
+        );
+    }
+
+    /// Soft-hyphen strip (step 3 in `normalise_text`).
+    #[test]
+    fn test_normalise_text_strips_soft_hyphen() {
+        // U+00AD used as a soft hyphen between "hy" and "phen".
+        let raw = format!("hy{}phen", std::str::from_utf8(b"\xC2\xAD").unwrap());
+        let result = normalise_text(&raw);
+        assert_eq!(result, "hyphen");
+    }
+
+    /// **Pipeline order lock-in.** Mixed-input test exercising the
+    /// full 7-step normalise pipeline in a single call so a future
+    /// refactor that re-orders the steps (e.g. trim-before-collapse)
+    /// is caught immediately. Input: NFC-decomposable char + U+FB01
+    /// ligature + CRLF + 4 consecutive newlines + leading/trailing
+    /// whitespace.
+    #[test]
+    fn test_normalise_text_combined_pipeline_integrity() {
+        // U+0065 + U+0301 = NFD form of U+00E9.
+        let nfd_e_acute = std::str::from_utf8(b"e\xCC\x81").unwrap();
+        let lig = std::str::from_utf8(b"\xEF\xAC\x81").unwrap();
+        let raw = format!(
+            "   \r\ncafe{} {} \n\n\n\n end   ",
+            nfd_e_acute, lig
+        );
+        let result = normalise_text(&raw);
+        // After all 7 steps the result must be:
+        //   - NFC: input was "cafe" + nfd_e_acute -> "cafe" + U+00E9
+        //     (NB: the prefix "cafe" is preserved verbatim; only the
+        //      prefix NFD sequences get NFC-composed. So expected
+        //      starts with four letters "cafe" not three "caf".)
+        //   - ligature U+FB01 -> "fi"
+        //   - CRLF -> LF; 4 interior newlines collapsed to 2
+        //   - trim() only strips ABSOLUTE leading/trailing whitespace;
+        //     it does not trim spaces around interior newlines.
+        //     So a single space survives on either side of "\n\n".
+        let expected = "cafe\u{00E9} fi \n\n end";
+        assert_eq!(
+            result, expected,
+            "full pipeline order integrity, got: {:?}",
+            result
+        );
     }
 
     #[test]

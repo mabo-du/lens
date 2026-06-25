@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use tauri::{command, AppHandle, State};
 use uuid::Uuid;
 
-use super::projects::AppState;
+use super::projects::{AppState, DbKey};
 use crate::import::{docx, image as image_import, normalise, pdf, txt};
 
 /// Extractor identifier written to the `document.extractor_id` column for
@@ -57,13 +57,37 @@ pub async fn documents_import_internal(
     project_id: String,
     file_path: String,
     file_format: String,
-    raw_text: Option<String>, // Provided for DOCX
+    raw_text: Option<String>, // Provided for DOCX or OCR'd PDF
+    // When `Some(_)`, written to `document.extractor_id` instead of
+    // the format-derived constant. Phase 1.5 OCR uses this to stamp
+    // `tesseract.js-{ver}`. Validated at IPC entry.
+    extractor_id_override: Option<String>,
 ) -> Result<Document, String> {
+    // Defense-in-depth: validate `extractor_id_override` at the
+    // internal-function entry, not only at the IPC entry in
+    // `documents_import`. In-process callers (tests, plugin impl
+    // blocks, future dispatchers) cannot bypass the safety check
+    // by skipping the Tauri command. Pure ASCII safe chars only,
+    // bounded length, no path traversal — a renderer bug or
+    // XSS-like attack cannot inject arbitrary text into
+    // `document.extractor_id`.
+    if let Some(ref s) = extractor_id_override {
+        if s.len() > 64
+            || !s.chars().all(|c| matches!(c,
+                'a'..='z' | 'A'..='Z' | '0'..='9' | '.' | '_' | '-'))
+        {
+            return Err(format!(
+                "extractor_id_override must match [A-Za-z0-9._-]+ and be <= 64 chars; got: {:?}",
+                s
+            ));
+        }
+    }
+
     // Reject unknown formats early so downstream match arms can use
     // unreachable!() safely — both the extraction and extractor-id
     // matches are guaranteed to only see valid formats.
     match file_format.as_str() {
-        "txt" | "docx" | "pdf" | "png" | "jpg" | "jpeg" => {}
+        "txt" | "docx" | "pdf" | "ocr_pdf" | "png" | "jpg" | "jpeg" => {}
         other => return Err(format!("Unsupported format: {}", other)),
     }
 
@@ -89,6 +113,26 @@ pub async fn documents_import_internal(
     }
 
     let extracted: Extracted<'_> = match (raw_text.as_deref(), file_format.as_str()) {
+        (Some(text), "ocr_pdf") => {
+            // OCR ingest (Phase 1.5). The renderer (Tesseract.js in a
+            // Web Worker) produces the text; Rust just normalises,
+            // hashes, counts words, and writes the row with the
+            // override-derived extractor_id (already validated).
+            let normalised = normalise::normalise_text(text);
+            let text_hash = normalise::compute_hash(&normalised);
+            let word_count = normalise::compute_word_count(&normalised);
+            let extractor_id = extractor_id_override
+                .as_deref()
+                .unwrap_or(DOCX_EXTRACTOR_ID);
+            Extracted {
+                plain_text: Some(normalised),
+                text_hash,
+                extractor_id,
+                word_count,
+                intrinsic_w: None,
+                intrinsic_h: None,
+            }
+        }
         (Some(text), _) => {
             // Renderer-supplied path (DOCX via Mammoth.js in practice;
             // mirrors DOCX_EXTRACTOR_ID for provenance continuity).
@@ -253,7 +297,11 @@ pub async fn documents_import_internal(
             let dest = assets_dir.join(format!("{}.{}", id, ext));
             // Best-effort: log failure but don't abort the import
             if let Err(e) = std::fs::copy(&file_path, &dest) {
-                eprintln!("Warning: could not copy source file to assets/: {}", e);
+                log::warn!(
+                    target: "lens::commands::import",
+                    "could not copy source file to assets/ ({:?} -> {:?}): {}",
+                    file_path, dest, e
+                );
             }
         }
     }
@@ -279,7 +327,22 @@ pub async fn documents_import(
     file_path: String,
     file_format: String,
     raw_text: Option<String>,
+    extractor_id_override: Option<String>,
 ) -> Result<Document, String> {
+    // Validate override at the IPC entry: pure ASCII safe chars only,
+    // bounded length, no path traversal. A renderer bug or XSS-like
+    // attack cannot inject arbitrary text into `document.extractor_id`.
+    if let Some(ref s) = extractor_id_override {
+        if s.len() > 64
+            || !s.chars().all(|c| matches!(c,
+                'a'..='z' | 'A'..='Z' | '0'..='9' | '.' | '_' | '-'))
+        {
+            return Err(format!(
+                "extractor_id_override must match [A-Za-z0-9._-]+ and be <= 64 chars; got: {:?}",
+                s
+            ));
+        }
+    }
     documents_import_internal(
         Some(&app),
         &state,
@@ -287,6 +350,7 @@ pub async fn documents_import(
         file_path,
         file_format,
         raw_text,
+        extractor_id_override,
     )
     .await
 }
@@ -362,7 +426,6 @@ mod tests {
             .await
             .expect("insert local_user");
 
-        // Build a .docx fixture with two paragraphs.
         let docx_bytes = build_minimal_docx(&["Hello world.", "Goodbye world."]);
         let docx_path: PathBuf = tmp.path().join("test.docx");
         std::fs::write(&docx_path, &docx_bytes).expect("write docx");
@@ -377,7 +440,7 @@ mod tests {
         let state = AppState {
             db: RwLock::new(Some(pool)),
             project_folder: RwLock::new(Some(project_folder.clone())),
-            encryption_key: RwLock::new(None),
+            encryption_key: RwLock::new(DbKey::default()),
         };
 
         // Call documents_import_internal with raw_text: None -- this is the
@@ -389,6 +452,7 @@ mod tests {
             docx_path.to_string_lossy().to_string(),
             "docx".to_string(),
             None,
+            None, // no OCR override (canonical DOCX path)
         )
         .await
         .expect("documents_import_internal");
@@ -440,6 +504,7 @@ mod tests {
             docx_path.to_string_lossy().to_string(),
             "docx".to_string(),
             None,
+            None, // no OCR override (canonical DOCX path)
         )
         .await
         .expect_err("re-import of same content must surface duplicate error");

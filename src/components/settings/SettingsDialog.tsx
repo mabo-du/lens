@@ -8,6 +8,7 @@ import {
 import { useUiStore } from '@/store/uiStore';
 import { useProjectStore } from '@/store/projectStore';
 import { projectsIpc } from '@/ipc/projects';
+import { projectSettingsIpc } from '@/ipc/project-settings';
 import { toast } from 'sonner';
 
 /**
@@ -83,6 +84,8 @@ export function SettingsDialog({
 
   const [displayName, setDisplayName] = useState('');
   const [savingName, setSavingName] = useState(false);
+  const [ollamaModel, setOllamaModel] = useState('');
+  const [savingModel, setSavingModel] = useState(false);
 
   const hydratedRef = useRef(false);
 
@@ -93,6 +96,9 @@ export function SettingsDialog({
       projectsIpc.localUserGetName()
         .then(setDisplayName)
         .catch(() => setDisplayName('Local User'));
+      projectSettingsIpc.get('ollama_model')
+        .then((v) => setOllamaModel(v ?? ''))
+        .catch(() => setOllamaModel(''));
     }
     // Hydrate app-wide settings from plugin-store (theme, defaultCodeColor).
     loadAppSettings().then((s) => {
@@ -136,6 +142,25 @@ export function SettingsDialog({
       toast.error(`Failed to update name: ${e}`);
     } finally {
       setSavingName(false);
+    }
+  };
+
+  const handleSaveModel = async () => {
+    const trimmed = ollamaModel.trim();
+    const newValue = trimmed || 'llama3.2';
+    if (!trimmed) setOllamaModel('llama3.2');
+    try {
+      const prev = await projectSettingsIpc.get('ollama_model');
+      if (prev === newValue || (!prev && newValue === 'llama3.2')) {
+        return; // no change, skip DB write + toast
+      }
+      setSavingModel(true);
+      await projectSettingsIpc.set('ollama_model', newValue);
+      toast.success('Ollama model updated');
+    } catch (e) {
+      toast.error(`Failed to update model: ${e}`);
+    } finally {
+      setSavingModel(false);
     }
   };
 
@@ -200,6 +225,34 @@ export function SettingsDialog({
               ))}
             </div>
           </fieldset>
+
+          {/* Ollama Model */}
+          <div>
+            <label htmlFor="ollama-model" className="text-sm font-medium text-slate-700 block mb-1.5">
+              Ollama Model
+            </label>
+            <div className="flex space-x-2">
+              <input
+                id="ollama-model"
+                value={ollamaModel}
+                onChange={(e) => setOllamaModel(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSaveModel()}
+                className="flex-1 px-3 py-1.5 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                maxLength={64}
+                placeholder="llama3.2"
+              />
+              <button
+                onClick={handleSaveModel}
+                disabled={savingModel}
+                className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50"
+              >
+                {savingModel ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+            <p className="text-xs text-slate-400 mt-1">
+              Model used for Ollama auto-coding. Pull with <code>ollama pull llama3.2</code>.
+            </p>
+          </div>
 
           {/* Default Code Color */}
           <fieldset>

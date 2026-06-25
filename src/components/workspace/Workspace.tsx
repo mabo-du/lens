@@ -9,7 +9,7 @@ import { FuzzyCodePicker } from '../editor/FuzzyCodePicker';
 import { ProjectJournalDialog } from '../memos/ProjectJournalDialog';
 import { SearchDialog } from '../search/SearchDialog';
 import { useProjectStore } from '@/store/projectStore';
-import { Book, Download, LogOut, Pencil, Settings, HelpCircle, Upload } from 'lucide-react';
+import { Book, Download, LogOut, Pencil, Settings, HelpCircle, Upload, ShieldCheck } from 'lucide-react';
 import React, { useState, ReactNode, useRef, useEffect } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
@@ -22,6 +22,7 @@ import { annotationsIpc } from '@/ipc/annotations';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { SettingsDialog } from '../settings/SettingsDialog';
 import { HelpDialog } from '../settings/HelpDialog';
+import { BackupDialog } from './BackupDialog';
 
 /**
  * Auto-update banner shown in production builds. Dev (`npm run dev`) renders
@@ -85,7 +86,7 @@ function UpdateBanner() {
   );
 }
 
-function TopNav({ onJournalOpen, onCloseProject, onSettingsOpen, onHelpOpen, onImportQdpx }: { onJournalOpen: () => void; onCloseProject: () => void; onSettingsOpen: () => void; onHelpOpen: () => void; onImportQdpx?: () => void }) {
+function TopNav({ onJournalOpen, onCloseProject, onSettingsOpen, onHelpOpen, onImportQdpx, onBackupOpen }: { onJournalOpen: () => void; onCloseProject: () => void; onSettingsOpen: () => void; onHelpOpen: () => void; onImportQdpx?: () => void; onBackupOpen: () => void }) {
   const activeProject = useProjectStore(s => s.activeProject);
   const setActiveProject = useProjectStore(s => s.setActiveProject);
   const [exporting, setExporting] = useState(false);
@@ -201,6 +202,18 @@ function TopNav({ onJournalOpen, onCloseProject, onSettingsOpen, onHelpOpen, onI
             </PopoverContent>
           </Popover>
         )}
+        {activeProject && (
+          <Tooltip>
+            <TooltipTrigger
+              className="flex items-center space-x-2 hover:bg-slate-700 px-3 py-1.5 rounded transition-colors text-sm"
+              onClick={onBackupOpen}
+            >
+              <ShieldCheck className="w-4 h-4" />
+              <span>Backup</span>
+            </TooltipTrigger>
+            <TooltipContent>Create or restore an encrypted .lensbackup archive</TooltipContent>
+          </Tooltip>
+        )}
         {activeProject && onImportQdpx && (
           <Tooltip>
             <TooltipTrigger className="flex items-center space-x-2 hover:bg-slate-700 px-3 py-1.5 rounded transition-colors text-sm" onClick={onImportQdpx}>
@@ -290,6 +303,7 @@ export function Workspace({ onImportQdpx }: { onImportQdpx?: () => void }) {
   const [journalOpen, setJournalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [backupOpen, setBackupOpen] = useState(false);
   const setActiveProject = useProjectStore(s => s.setActiveProject);
 
   // Undo/Redo keyboard shortcuts
@@ -364,7 +378,14 @@ export function Workspace({ onImportQdpx }: { onImportQdpx?: () => void }) {
 
   return (
     <div className="flex flex-col h-screen w-full bg-slate-100 font-sans">
-      <TopNav onJournalOpen={() => setJournalOpen(true)} onCloseProject={handleCloseProject} onSettingsOpen={() => setSettingsOpen(true)} onHelpOpen={() => setHelpOpen(true)} onImportQdpx={onImportQdpx} />
+      <TopNav
+        onJournalOpen={() => setJournalOpen(true)}
+        onCloseProject={handleCloseProject}
+        onSettingsOpen={() => setSettingsOpen(true)}
+        onHelpOpen={() => setHelpOpen(true)}
+        onImportQdpx={onImportQdpx}
+        onBackupOpen={() => setBackupOpen(true)}
+      />
       <UpdateBanner />
       <Group
         onLayoutChanged={(sizes) => {
@@ -402,6 +423,7 @@ export function Workspace({ onImportQdpx }: { onImportQdpx?: () => void }) {
       <ProjectJournalDialog open={journalOpen} onOpenChange={setJournalOpen} />
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      <BackupDialog open={backupOpen} onOpenChange={setBackupOpen} />
       <SearchDialog />
     </div>
   );

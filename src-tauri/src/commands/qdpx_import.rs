@@ -398,8 +398,16 @@ pub async fn qdpx_import_undo_internal(
 
     std::fs::remove_file(&backup_path).ok();
 
-    let encryption_key = state.encryption_key.read().await.clone();
-    let pool = crate::db::init_db(&db_path, encryption_key.as_deref()).await?;
+    // State holds the **derived 64-char hex** (set by
+    // `projects_create_internal` / `projects_open` — see the doc
+    // comment in `commands::projects` for the v0.1.3+ semantics).
+    // `init_db` consumes it directly; no second derivation is needed
+    // and would be wrong (double-hashing the hex). The quote-escape
+    // backstop in `init_db` is unreachable for a hex value (always
+    // `[0-9a-f]`) but kept as defense-in-depth alongside the
+    // Path A → Path B stack.
+    let key_for_db = state.encryption_key.read().await.clone();
+    let pool = crate::db::init_db(&db_path, key_for_db.as_deref()).await?;
     *state.db.write().await = Some(pool);
 
     Ok("Import undone. Previous data restored.".to_string())

@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
+import tesseractPkg from "tesseract.js/package.json" with { type: "json" };
 
 /// <reference types="vitest/config" />
 
@@ -9,6 +10,14 @@ const host: string | undefined = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
+  // `__TESSERACT_JS_VERSION__` is statically substituted at build time
+  // with the version pinned in package.json. Module workers (ocrWorker.ts)
+  // and the main thread (DocumentList.tsx) both read it via a
+  // `declare global { const __TESSERACT_JS_VERSION__: string; }` block.
+  // See docs/research-papers/QDA Multimedia Annotation Architecture.md.
+  define: {
+    __TESSERACT_JS_VERSION__: JSON.stringify(tesseractPkg.version),
+  },
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

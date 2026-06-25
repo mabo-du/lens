@@ -27,12 +27,14 @@ async fn happy_path_create_project_import_document_code_and_annotation() {
     let _user_id = seed_local_user(&state).await;
 
     let doc = documents_import_internal(
+        
         None,
         &state,
         project.id.clone(),
         "/tmp/test.txt".to_string(),
         "txt".to_string(),
         Some("Hello world, this is a test document.".to_string()),
+        None, // extractor_id_override (no override needed)
     )
     .await
     .expect("Failed to import document");
@@ -324,12 +326,14 @@ async fn document_delete_cleans_up_annotations_and_fts() {
     let _user_id = seed_local_user(&state).await;
 
     let doc = documents_import_internal(
+        
         None,
         &state,
         project.id.clone(),
         "/tmp/test.txt".to_string(),
         "txt".to_string(),
         Some("Hello world, this is a test document.".to_string()),
+        None, // extractor_id_override (no override needed)
     )
     .await
     .expect("Failed to import document");
@@ -463,12 +467,14 @@ async fn annotations_create_rejects_invalid_ranges() {
     let _user_id = seed_local_user(&state).await;
 
     let doc = documents_import_internal(
+        
         None,
         &state,
         project.id.clone(),
         "/tmp/test.txt".to_string(),
         "txt".to_string(),
         Some("Hello world".to_string()),
+        None, // extractor_id_override (no override needed)
     )
     .await
     .expect("Failed to import document");
@@ -1386,6 +1392,7 @@ async fn qdpx_import_replace_mode_clears_existing_data() {
         "/tmp/old.txt".to_string(),
         "txt".to_string(),
         Some("Pre-existing document text.".to_string()),
+        None, // extractor_id_override (no override needed)
     )
     .await
     .expect("Failed to import pre-existing document");
@@ -1502,6 +1509,7 @@ async fn qdpx_import_merge_mode_preserves_existing_data() {
         "/tmp/existing.txt".to_string(),
         "txt".to_string(),
         Some("Pre-existing document text.".to_string()),
+        None, // extractor_id_override (no override needed)
     )
     .await
     .expect("Failed to import pre-existing document");
@@ -1749,6 +1757,7 @@ async fn qdpx_import_undo_restores_previous_data() {
         "/tmp/pre-import.txt".to_string(),
         "txt".to_string(),
         Some("This data should survive undo.".to_string()),
+        None, // extractor_id_override (no override needed)
     )
     .await
     .expect("Failed to import pre-existing document");
@@ -1933,7 +1942,7 @@ async fn documents_import_image_png_populates_intrinsic_dimensions() {
     let state = AppState {
         db: RwLock::new(Some(pool)),
         project_folder: RwLock::new(Some(project_folder.clone())),
-        encryption_key: RwLock::new(None),
+        encryption_key: RwLock::new(crate::commands::projects::DbKey::default()),
     };
 
     let doc = documents_import_internal(
@@ -1943,6 +1952,7 @@ async fn documents_import_image_png_populates_intrinsic_dimensions() {
         png_path.to_string_lossy().to_string(),
         "png".to_string(),
         None,
+        None, // extractor_id_override (no override needed)
     )
     .await
     .expect("documents_import_internal for image");
@@ -2026,7 +2036,7 @@ async fn documents_import_rejects_unknown_format() {
     let state = AppState {
         db: RwLock::new(Some(pool)),
         project_folder: RwLock::new(Some(project_folder.clone())),
-        encryption_key: RwLock::new(None),
+        encryption_key: RwLock::new(crate::commands::projects::DbKey::default()),
     };
 
     let err = documents_import_internal(
@@ -2036,6 +2046,7 @@ async fn documents_import_rejects_unknown_format() {
         bogus_path.to_string_lossy().to_string(),
         "bmp".to_string(),
         None,
+        None, // extractor_id_override (no override needed)
     )
     .await
     .expect_err("bmp format must be rejected at dispatcher");
@@ -2046,10 +2057,6 @@ async fn documents_import_rejects_unknown_format() {
         err
     );
 }
-
-// ============================================================
-// v0.1.1 integration tests — image region IPC + migration 05
-// ============================================================
 
 /// Validates the image_selection schema path works end-to-end:
 /// insert a `selection` parent + `image_selection` extension row
@@ -2251,10 +2258,6 @@ async fn document_get_asset_base64_rejects_non_image() {
         "txt doc must NOT match the image-format whitelist; the IPC would return Err"
     );
 }
-
-// ============================================================
-// v0.2 integration tests — image polygon IPC + migration 06
-// ============================================================
 
 /// Validates the image_polygon schema path works end-to-end:
 /// insert a `selection` parent + `image_polygon` extension row inside

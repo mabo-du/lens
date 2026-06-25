@@ -33,6 +33,12 @@ interface UiState {
   theme: 'light' | 'dark' | 'system';
   defaultCodeColor: string;
 
+  /// Set to true once on app mount if the Rust binary was compiled with
+  /// the `sqlcipher` Cargo feature. When false, the live-at-rest project
+  /// encryption is unavailable (PRAGMA key is silently ignored by plain
+  /// SQLite) and the UI hides the encryption option in `EncryptionDialog`.
+  encryptionAvailable: boolean | null;
+
   setLeftPanelWidth: (w: number) => void;
   setRightPanelWidth: (w: number) => void;
   setActiveDocument: (id: string | null) => void;
@@ -48,6 +54,7 @@ interface UiState {
   fixStackTopAnnotation: (stack: 'undo' | 'redo', annotation: UndoEntry['annotation']) => void;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
   setDefaultCodeColor: (color: string) => void;
+  setEncryptionAvailable: (b: boolean) => void;
 }
 
 export const useUiStore = create<UiState>()(
@@ -64,6 +71,7 @@ export const useUiStore = create<UiState>()(
       annotationRedoStack: [],
       theme: 'system' as const,
       defaultCodeColor: '#6366f1',
+      encryptionAvailable: null,
 
       setLeftPanelWidth: (w) => set({ leftPanelWidth: w }),
       setRightPanelWidth: (w) => set({ rightPanelWidth: w }),
@@ -149,6 +157,7 @@ export const useUiStore = create<UiState>()(
         }),
       setTheme: (theme) => set({ theme }),
       setDefaultCodeColor: (color) => set({ defaultCodeColor: color }),
+      setEncryptionAvailable: (encryptionAvailable) => set({ encryptionAvailable }),
     }),
     {
       name: 'lens-ui-storage',

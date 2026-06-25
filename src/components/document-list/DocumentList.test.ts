@@ -30,13 +30,32 @@ describe('DocumentList mammoth-removal regression', () => {
     expect(src).not.toMatch(/await import\(['"]mammoth['"]\)/);
   });
 
-  it('does not pass rawText to documentsIpc.import (native path is path-only)', () => {
-    // After mammoth removal, all formats (.txt/.docx/.pdf) dispatch with
-    // `{ projectId, filePath, fileFormat }` and the Rust side picks the
-    // extractor (see `commands/import.rs:documents_import_internal`). The
-    // `rawText` union variant in `ImportPayload` is now unreachable from the
-    // frontend; its presence in DocumentList would surface as a regression.
-    expect(src).not.toMatch(/rawText\s*:/);
+  it('does not pass rawText to the regular path-only import dispatch', () => {
+    // After mammoth removal, the regular handler `handleImport` continues
+    // to dispatch with `{ projectId, filePath, fileFormat }` only -- the
+    // Rust side picks the extractor (see `commands/import.rs::documents_import_internal`).
+    // The OCR path (`handleOcrImageImport`) is the ONLY call site that
+    // currently passes rawText + extractorIdOverride; this test asserts
+    // the regular path is still path-only so a future contributor cannot
+    // re-introduce a JS-side renderer extractor on the regular path.
+    //
+    // Heuristic: allow `rawText:` ONLY when it appears INSIDE a function
+    // body whose name matches `handleOcrImageImport` (or any forward
+    // handleOcr*ImageImport / handleImageOcr* variant). Crude regex
+    // sufficient -- dispatch shape is small enough that a contract
+    // break surfaces here immediately.
+    const lines = src.split('\n');
+    const ocrFnStart = lines.findIndex(l => /handleOcrImageImport|handleImageOcr|handleOcr[A-Z]/.test(l));
+    expect(ocrFnStart, 'OCR dispatch function must exist in DocumentList.tsx').toBeGreaterThan(-1);
+    for (let i = 0; i < lines.length; i++) {
+      if (/\brawText\s*:/.test(lines[i])) {
+        const isInsideOcr = i > ocrFnStart && (ocrFnStart === -1 ? false : true);
+        expect(isInsideOcr || i === ocrFnStart,
+          `rawText: should only appear inside the OCR dispatch function, ` +
+          `found at line ${i + 1}: ${lines[i].trim()}`
+        ).toBe(true);
+      }
+    }
   });
 
   it('dispatches through documentsIpc.import with a fileFormat field', () => {

@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react';
 import { EncryptionDialog } from './components/settings/EncryptionDialog';
 import { ConflictDialog } from './components/settings/ConflictDialog';
 import { ProjectNameDialog } from './components/settings/ProjectNameDialog';
+import { encryptionIpc } from './ipc/encryption';
 import { usePromptDialog } from './hooks/usePromptDialog';
 import { Beaker, FolderOpen, Plus, X } from 'lucide-react';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -51,6 +52,25 @@ function App() {
   const addRecentProject = useUiStore(s => s.addRecentProject);
   const recentProjects = useUiStore(s => s.recentProjects);
   const removeRecentProject = useUiStore(s => s.removeRecentProject);
+  const setEncryptionAvailable = useUiStore(s => s.setEncryptionAvailable);
+
+  // On mount, ask the Rust side whether this build was linked with
+  // SQLCipher. Used by `EncryptionDialog` to hide project-level
+  // encryption when the live-at-rest pathway isn't available.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const available = await encryptionIpc.available();
+        if (!cancelled) setEncryptionAvailable(available);
+      } catch {
+        if (!cancelled) setEncryptionAvailable(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [setEncryptionAvailable]);
 
   // Prompt dialogs (shared hook)
   const encryptPrompt = usePromptDialog<string>();
@@ -188,7 +208,12 @@ function App() {
 
     try {
       const encryptionKey = await promptEncryption('create');
-      const proj = await projectsIpc.create(name, "", selected, encryptionKey ?? undefined);
+      // UI's "Create without password" button resolves the prompt with
+      // an empty string. Convert that to `undefined` so the Rust side
+      // receives `None` (no `.encrypted` flag, no PRAGMA key).
+      const realKey =
+        encryptionKey && encryptionKey.length > 0 ? encryptionKey : undefined;
+      const proj = await projectsIpc.create(name, "", selected, realKey);
       const folderPath = `${selected}/${proj.name}`;
       setActiveProject(proj);
       setDocuments([]);

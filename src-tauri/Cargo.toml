@@ -19,7 +19,15 @@ tauri-plugin-fs = "2.5.1"
 tauri-plugin-shell = "2.3.5"
 tauri-plugin-store = "2"
 tauri-plugin-updater = "2"
+# sqlx itself needs the `sqlite` feature to expose `SqlitePool`,
+# `SqliteConnection`, `Sqlite` and friends. SQLCipher linkage is
+# controlled separately by enabling `libsqlite3-sys/sqlcipher` via
+# our `sqlcipher` cargo feature (see [features] below).
 sqlx = { version = "0.9.0", features = ["sqlite", "runtime-tokio", "macros"] }
+# Pinned to 0.30.1 (= sqlx 0.9's transitive pin) so cargo's resolver
+# doesn't drift. CI MUST exercise the encryption path with
+# --features sqlcipher; default cargo test SILENTLY skips it.
+libsqlite3-sys = { version = "0.30.1" }
 uuid = { version = "1.14.0", features = ["v4", "serde"] }
 tokio = { version = "1.52.3", features = ["sync", "macros", "rt-multi-thread"] }
 unicode-normalization = "0.1"
@@ -29,8 +37,28 @@ zip = "2"
 roxmltree = "0.20"
 image = "0.25"
 base64 = "0.22"
+aes-gcm = "0.10"
+argon2 = "0.5"
+rand = "0.8"
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+# Structured logging facade + simple stderr/stdout logger for
+# PRAGMA-default events and other "something is off" signals.
+# env_logger::try_init() is called once at startup; tests that
+# don't need it skip via `try_init().ok()` (idempotent).
+log = "0.4"
+env_logger = "0.11"
 
 [dev-dependencies]
 tempfile = "3"
 
 [features]
+default = []
+# Opt-in feature: routes the `sqlcipher` flag through to libsqlite3-sys,
+# which actually links SQLCipher into the binary. Requires libsqlcipher
+# installed at the system level (e.g., `apt install libsqlcipher-dev` on
+# Debian, `brew install sqlcipher` on macOS). Build with:
+#   cargo build --features sqlcipher
+#   cargo test  --features sqlcipher
+# Default builds (no `--features sqlcipher`) work on any system because
+# libsqlite3-sys/sqlcipher stays off.
+sqlcipher = ["libsqlite3-sys/sqlcipher"]

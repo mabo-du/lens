@@ -16,11 +16,10 @@ export interface DocumentRecord {
   intrinsicH?: number | null;
   importedAt: string;
   sortOrder: number;
-}
-
-export type ImportPayload = 
+}export type ImportPayload =
   | { projectId: string; filePath: string; fileFormat: string }
-  | { projectId: string; filePath: string; fileFormat: string; rawText: string };
+  | { projectId: string; filePath: string; fileFormat: string; rawText: string }
+  | { projectId: string; filePath: string; fileFormat: string; rawText: string; extractorIdOverride: string };
 
 export interface DocumentAsset {
   /** base64-encoded PNG/JPG/JPEG bytes */

@@ -19,8 +19,8 @@ jobs:
     name: TypeScript gates
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e1148825835ea55811796d1948834465d64828 # v4.3.1
+      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4
         with:
           node-version: 20
           cache: npm
@@ -35,9 +35,9 @@ jobs:
     name: Rust gates
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@34e1148825835ea55811796d1948834465d64828 # v4.3.1
+      - uses: dtolnay/rust-toolchain@e97e2d83da1543888362634358bb380e0c0ab58c # v1
+      - uses: Swatinem/rust-cache@c193711b7d5225026938dc4027774d081b83d86f # v2.9.1
         with:
           workspaces: src-tauri -> target
       # Round-80 fix — install Tauri 2 Linux system deps BEFORE cargo test.
@@ -72,8 +72,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [typescript, rust]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e1148825835ea55811796d1948834465d64828 # v4.3.1
+      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4
         with:
           node-version: 20
           cache: npm
@@ -111,21 +111,21 @@ jobs:
       # bundles the timestamped globalSetup log + the kill receipt.
       - name: Upload Playwright HTML report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@330a01c4479e0a05a81e3a74693a105230bf7140 # v4
         with:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
       - name: Upload test-results (per-test traces + screenshots)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@330a01c4479e0a05a81e3a74693a105230bf7140 # v4
         with:
           name: test-results
           path: test-results/
           retention-days: 7
       - name: Upload perf benchmark numbers
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@330a01c4479e0a05a81e3a74693a105230bf7140 # v4
         with:
           name: lens-perf-results
           path: tools/perf/results.json
@@ -133,27 +133,70 @@ jobs:
           if-no-files-found: ignore
       - name: Upload globalSetup/globalTeardown artifact log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@330a01c4479e0a05a81e3a74693a105230bf7140 # v4
         with:
           name: lens-e2e-log
           path: .lens-e2e/
           retention-days: 7
           if-no-files-found: ignore
 
+  rust-sqlcipher:
+    # v0.1.4 followup — separate sqlcipher test gate. The earlier
+    # `rust:` job intentionally omits `--features sqlcipher` to keep
+    # that surface fast (no libsqlcipher install on the runner, no
+    # dependency on Ubuntu's libsqlcipher-dev availability). This
+    # dedicated job:
+    #   * installs libsqlcipher-dev on the runner
+    #   * runs sqlcipher-gated tests with `--test-threads=1`
+    #     (parallel run under /tmp pressure was the source of the
+    #     v0.1.3-era flake; serial is deterministic)
+    #   * marks the job as `needs: [typescript]` so we don't waste CI
+    #     minutes on Rust if TS gates would fail anyway
+    # The original plain-SQLite `rust:` job stays the fast gate.
+    name: Rust sqlcipher gates (serial)
+    runs-on: ubuntu-latest
+    needs: [typescript]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: dtolnay/rust-toolchain@e97e2d83da1543888362634358bb380e0c0ab58c # v1
+      - uses: Swatinem/rust-cache@c193711b7d5225026938dc4027774d081b83d86f # v2.9.1
+        with:
+          workspaces: src-tauri -> target
+      - name: Install libsqlcipher-dev (v0.1.4 followup)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libsqlcipher-dev \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev \
+            libdbus-1-dev \
+            libsqlite3-dev \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            build-essential \
+            pkg-config \
+            file
+      - name: Cargo test (sqlcipher feature, --test-threads=1)
+        run: cargo test --manifest-path src-tauri/Cargo.toml --features sqlcipher -- --test-threads=1 --include-ignored
+
   linux-build:
     name: Linux Tauri build (smoke)
     runs-on: ubuntu-latest
     needs: [typescript, rust]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e1148825835ea55811796d1948834465d64828 # v4.3.1
+      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4
         with:
           node-version: 20
           cache: npm
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@e97e2d83da1543888362634358bb380e0c0ab58c # v1
         with:
           targets: x86_64-unknown-linux-gnu
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@c193711b7d5225026938dc4027774d081b83d86f # v2.9.1
         with:
           workspaces: src-tauri -> target
       - name: Install Linux system dependencies for Tauri 2
@@ -180,7 +223,7 @@ jobs:
         run: bash scripts/build-sidecar.sh
       - name: Tauri build (binary only, no installers)
         run: npx tauri build --no-bundle
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:
           name: lens-binary
           path: src-tauri/target/release/lens
