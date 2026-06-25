@@ -14,37 +14,40 @@ force-push of `v0.2.0-rc.2`) triggers a brand-new workflow_run whose
 publish-pypi job produces a wheel with a fresh PEP 427 filename
 (`lens_qda-0.2.0-py3-none-any.whl`) that PyPI's JSON upload API
 accepts on first attempt. Closes the publishing-failure pattern
-documented across round-11..13 (PyPI rejects re-upload of the same
-wheel filename).
+documented across commits `8a65185`, `30510ac` (PyPI rejects
+re-upload of the same wheel filename).
 
 ### Fixed (this GA cut)
-Three semantic groups (per round-15 reviewer feedback; full commit-by-commit
-provenance is in `git log`).
-- **Pipeline reliability** - scripts/build-sidecar.sh now writes the
-  PyInstaller binary to the path `externalBin` expects (round-8);
-  macOS matrix split so `macos-13` builds the Intel binary and
-  `macos-14` builds the Apple-Silicon binary natively (round-8);
-  `libfuse2` + `liblzma-dev` added to the Linux apt-get block so
-  `linuxdeploy-plugin-appimage` emits the AppImage asset (round-9);
-  tauri-action signing env wrapped in `${{ secrets.X || "" }}` so
-  absent signing keys skip the updater-manifest step instead of
-  aborting the build (round-9); `pip install --upgrade pip || true`
-  in publish-pypi's smoke test (round-10).
+Three semantic groups (collapsed into pipeline reliability, workflow
+conformance, workflow documentation; full commit-by-commit provenance
+is in `git log`).
+- **Pipeline reliability** - `scripts/build-sidecar.sh` now writes the
+  PyInstaller binary to the path `externalBin` expects
+  (commit `da37066`); macOS matrix split so `macos-13` builds the
+  Intel binary and `macos-14` builds the Apple-Silicon binary
+  natively (commit `2e9dad4`); `libfuse2` + `liblzma-dev` added to
+  the Linux apt-get block so `linuxdeploy-plugin-appimage` emits the
+  AppImage asset (commit `2e9dad4`); tauri-action signing env wrapped
+  in `${{ secrets.X || "" }}` so absent signing keys skip the
+  updater-manifest step instead of aborting the build (commit `2e9dad4`);
+  `pip install --upgrade pip || true` in publish-pypi's smoke test
+  (commit `ed81662`).
 - **Workflow conformance** - per-host `bundles:` matrix field pin
   (`nsis` only on Windows to skip the intermittent WiX auto-download,
   `appimage,deb` on Linux, `app,dmg` on macOS) forwarded to
   tauri-action's `args:` via `--bundles ${{ matrix.bundles }}`
-  (round-10).
+  (commit `ed81662`).
 - **Workflow documentation** - PyPI duplicate-filename rejection
-  correctly documented in the publish-pypi block (round-11..13): the
-  constraint is filename-uniqueness, not version-uniqueness; an sdist
-  upload under an existing lens-qda==version IS permitted; the
-  proper invalidation path is `yank the entire release` + cut a new
-  version (PyPI web UI does not expose per-file delete). The
-  draft-release lifecycle is documented above the tauri-action step
-  (round-12): drafts are created on the first successful matrix entry
-  of a tag, appended on subsequent entries, promoted to non-draft
-  via GitHub web UI click (tauri-action does not auto-publish).
+  correctly documented in the publish-pypi block (commits `8a65185`,
+  `30510ac`): the constraint is filename-uniqueness, not
+  version-uniqueness; an sdist upload under an existing
+  `lens-qda==<version>` IS permitted; the proper invalidation path
+  is `yank the entire release` + cut a new version (PyPI web UI
+  does not expose per-file delete). The draft-release lifecycle is
+  documented above the tauri-action step (commit `30510ac`): drafts
+  are created on the first successful matrix entry of a tag,
+  appended on subsequent entries, promoted to non-draft via GitHub
+  web UI click (tauri-action does not auto-publish).
 
 ### Changed
 - `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`
