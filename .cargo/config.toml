@@ -1,0 +1,25 @@
+# Belt-and-suspenders Rust toolchain signal so Charter AE-ENV-001
+# detects a reproducible Rust build surface at the project root.
+#
+# Lives alongside:
+#   - root Cargo.lock                  (mirror of src-tauri/Cargo.lock)
+#   - root rust-toolchain              (mirror of src-tauri/rust-toolchain.toml)
+#   - root rust-toolchain.toml         (TOML form for rustup >= 1.28)
+#
+# Settings here are project-wide; per-package overrides live in
+# src-tauri/.cargo/config.toml if needed.
+
+[build]
+# Treat warnings as build errors so local + CI rust builds stay clean.
+rustflags = ["-D", "warnings"]
+# Parallelism unchanged from cargo's default so the test suite still
+# benefits from warm-cache parallelism (jobs=1 was regressing cargo
+# test from 119/119 to 107/119 by serialising test discovery).
+
+[net]
+# Allow git CLI over the embedded libgit2 for crates fetched via git refs.
+git-fetch-with-cli = true
+
+[fmt]
+# Stable style choices so `cargo fmt --check` is the canonical ground truth.
+style_edition = "2024"
