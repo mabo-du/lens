@@ -25,4 +25,6 @@ export const projectsIpc = {
     invoke<void>('local_user_update_name', { name }),
   isEncrypted: (projectDir: string) =>
     invoke<boolean>('projects_is_encrypted', { projectDir }),
+  checkLock: (projectDir: string) =>
+    invoke<string | null>('projects_check_lock', { projectDir }),
 };

@@ -107,7 +107,7 @@ Dependable image-doc UX: Konva-powered image viewer with drag-to-create bbox reg
 - `image_selection_bbox_round_trip` — assert insert → SELECT (JOIN) → delete via FK cascade.
 - `migration_05_relaxes_plain_text` — assert a row can be inserted with NULL `plain_text` and the value round-trips (closes the round-70 regression violation that originally broke 34 of 53 tests).
 
-## [Unreleased]
+## [0.2.0-rc.1] - 2026-06-26
 
 ### v0.2 — Playwright E2E wiring + http-server stack + CI integration (round-78)
 
@@ -373,6 +373,44 @@ third-party-action blocklist on `Settings → Actions → General → Allow
 specified actions`. Steps are written to `.gh_admin_org_setup.md` in
 the repository root.
 
+### v0.2 — Collaboration lock file + lock status indicator (round-79, this commit)
+
+Implements the baton-pass collaboration lock from Plan §7.2, preventing
+simultaneous project access across devices.
+
+#### Lock file lifecycle
+
+On project open, a `project.lock` file is written to the project folder
+containing the local user's display name and a Unix timestamp. On project
+close (or app quit via `CloseRequested` window event), it's removed.
+
+- **`projects_check_lock`** — new Tauri command. Before opening, callers
+  check for a live lock file. Returns a warning message if a fresh lock
+  (<8 hours old) is found; stale locks are silently cleared.
+- **`App.tsx` open flow** — `handleOpenProject` now checks for a live lock
+  via `projectsIpc.checkLock()` and shows a `confirm()` dialog before
+  proceeding.
+- **`projects_close`** — removes the lock file on normal project close.
+- **`on_window_event(CloseRequested)`** — `lib.rs` registers a handler that
+  removes the lock file on unexpected app quit (crash recovery).
+- **`remove_lock_file`** — `pub(crate)` helper for the above paths.
+
+#### Lock status indicator
+
+The workspace TopNav now shows a subtle lock badge (🔒 + user name) when
+a project is open, reassuring researchers that they hold the collaboration
+baton. The badge auto-fetches the local user's display name on project
+open via `local_user_get_name`.
+
+#### Tests
+
+10 Rust integration tests in `lock_file_tests` module cover the full
+lock lifecycle: write/read round-trip, empty/missing lock, Unicode user
+names, fresh-lock warning, stale-lock auto-clear, and timestamp integrity
+on rewrite.
+
 ### Planned for v0.2 (remaining)
 - Apple-signing release.yml matrix verification + GA cut
 - Custom-canvas comparison vs the round-77 Konva baseline (v0.3 track)
+
+## [Unreleased]

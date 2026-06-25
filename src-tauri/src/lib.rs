@@ -131,6 +131,7 @@ pub fn run() {
             commands::projects::local_user_get_name,
             commands::projects::local_user_update_name,
             commands::projects::projects_is_encrypted,
+            commands::projects::projects_check_lock,
             commands::sample_project::projects_create_sample,
             commands::encryption::encryption_available,
             commands::encryption::recovery_key_generate,
@@ -144,6 +145,15 @@ pub fn run() {
             commands::audio::audio_media_segments,
             commands::audio::audio_transcript,
         ])
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                if let Some(state) = window.try_state::<commands::projects::AppState>() {
+                    if let Some(ref folder) = *state.project_folder.blocking_read() {
+                        commands::projects::remove_lock_file(folder);
+                    }
+                }
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

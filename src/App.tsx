@@ -98,6 +98,11 @@ function App() {
     const selected = folderPath || await openDialog({ directory: true });
     if (selected && typeof selected === 'string') {
       try {
+        // Check for a live collaboration lock before opening.
+        const lockWarning = await projectsIpc.checkLock(selected);
+        if (lockWarning && !confirm(lockWarning + '\n\nOpen anyway?')) {
+          return;
+        }
         // Check if project is encrypted
         let encryptionKey: string | undefined;
         const encrypted = await projectsIpc.isEncrypted(selected);

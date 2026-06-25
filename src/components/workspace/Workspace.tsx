@@ -9,7 +9,7 @@ import { FuzzyCodePicker } from '../editor/FuzzyCodePicker';
 import { ProjectJournalDialog } from '../memos/ProjectJournalDialog';
 import { SearchDialog } from '../search/SearchDialog';
 import { useProjectStore } from '@/store/projectStore';
-import { Book, Download, LogOut, Pencil, Settings, HelpCircle, Upload, ShieldCheck } from 'lucide-react';
+import { Book, Download, LogOut, Pencil, Settings, HelpCircle, Upload, ShieldCheck, Lock } from 'lucide-react';
 import React, { useState, ReactNode, useRef, useEffect } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
@@ -92,7 +92,25 @@ function TopNav({ onJournalOpen, onCloseProject, onSettingsOpen, onHelpOpen, onI
   const [exporting, setExporting] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState('');
+  const [lockHolder, setLockHolder] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!activeProject) {
+      setLockHolder(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const name = await projectsIpc.localUserGetName();
+        if (!cancelled) setLockHolder(name);
+      } catch {
+        if (!cancelled) setLockHolder(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeProject]);
 
   useEffect(() => {
     if (renaming && renameInputRef.current) renameInputRef.current.focus();
@@ -172,6 +190,7 @@ function TopNav({ onJournalOpen, onCloseProject, onSettingsOpen, onHelpOpen, onI
           />
         </form>
       ) : (
+        <div className="flex items-center space-x-3">
         <button
           onClick={startRename}
           className="font-semibold text-sm tracking-wide hover:text-blue-300 transition-colors flex items-center space-x-1 group"
@@ -180,6 +199,16 @@ function TopNav({ onJournalOpen, onCloseProject, onSettingsOpen, onHelpOpen, onI
           <span>{activeProject?.name || 'LENS'}</span>
           <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" />
         </button>
+        {lockHolder && (
+          <Tooltip>
+            <TooltipTrigger className="flex items-center space-x-1 text-xs text-emerald-400 bg-emerald-900/30 px-2 py-0.5 rounded-full">
+              <Lock className="w-3 h-3" />
+              <span>{lockHolder}</span>
+            </TooltipTrigger>
+            <TooltipContent>You hold the collaboration lock for this project</TooltipContent>
+          </Tooltip>
+        )}
+        </div>
       )}
       <div className="flex items-center space-x-2">
         {activeProject && (
