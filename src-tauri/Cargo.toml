@@ -44,7 +44,7 @@ image = "0.25"
 base64 = "0.22"
 aes-gcm = "0.10"
 argon2 = "0.5"
-rand = "0.8"
+rand = "0.10"
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 # Structured logging facade + simple stderr/stdout logger for
 # PRAGMA-default events and other "something is off" signals.
