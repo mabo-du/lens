@@ -139,6 +139,10 @@ pub fn run() {
             commands::project_settings::project_setting_get,
             commands::project_settings::project_setting_set,
             commands::ollama::autocode_chunk,
+            commands::analytics::analytics_code_frequency,
+            commands::analytics::analytics_co_occurrence,
+            commands::audio::audio_media_segments,
+            commands::audio::audio_transcript,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

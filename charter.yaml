@@ -1,4 +1,19 @@
-# yaml-language-server: $schema=https://use-charter.dev/schema/charter.schema.json
+# HISTORICAL — Charter policy file, deprecated.
+#
+# The LENS project formerly used Charter to gate the AI-agent
+# readiness surface (`charter doctor` as a pre-commit + pre-push
+# hook, plus a Charter CI workflow). Following a maintainer decision
+# to opt out, Charter is no longer invoked from any local gate or
+# CI pipeline:
+#   - `.githooks/pre-commit` no longer calls `charter doctor`.
+#   - `.github/workflows/charter.yaml` has been deleted.
+#   - `.github/workflows/charter-*/` configs no longer reference
+#     `use-charter/charter-action@v1`.
+#   - `aislop scan` has been removed from the pre-commit hook as well.
+#
+# This file is retained for git-archaeology. The lines below are
+# inert: no tool reads them. Going forward, all gate policy lives
+# in `.githooks/pre-commit` and `.github/workflows/*.yml`.
 policy:
   profile: standard
   languages:
@@ -24,8 +39,8 @@ hooks:
   pre-commit:
     - npx tsc --noEmit
     - '(cd src-tauri && cargo test --features sqlcipher)'
-    - charter doctor
+    # (charter doctor removed — see header comment)
   pre-push:
     - npx tsc --noEmit
     - '(cd src-tauri && cargo test --features sqlcipher)'
-    - charter doctor
+    # (charter doctor removed — see header comment)

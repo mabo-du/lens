@@ -164,6 +164,7 @@ export const useUiStore = create<UiState>()(
       partialize: (state) => ({
         leftPanelWidth: state.leftPanelWidth,
         rightPanelWidth: state.rightPanelWidth,
+        activeDocumentId: state.activeDocumentId,
         expandedCodeNodeIds: state.expandedCodeNodeIds,
         recentProjects: state.recentProjects,
         theme: state.theme,

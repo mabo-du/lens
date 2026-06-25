@@ -32,19 +32,10 @@ import { useUiStore } from '@/store/uiStore';
 // -----------------------------------------------------------------------------
 // IPC mock — a single in-memory backend that simulates what the Rust side
 // would return. Each invocation is appended to __LENS_TEST__.invocations
-// and tests assert against that log.
+// and tests assert against that log. All IPC routing goes through the
+// window.__TAURI_INTERNALS__.invoke stub below; no individual ipc/* imports
+// are called directly, keeping the fixture lint-clean.
 // -----------------------------------------------------------------------------
-import { documentsIpc } from '@/ipc/documents';
-import { codesIpc } from '@/ipc/codes';
-import { annotationsIpc } from '@/ipc/annotations';
-import { searchIpc } from '@/ipc/search';
-import { memosIpc } from '@/ipc/memos';
-import { projectsIpc } from '@/ipc/projects';
-import { qdpxImportIpc } from '@/ipc/qdpx_import';
-import { exportIpc } from '@/ipc/export';
-import { encryptionIpc } from '@/ipc/encryption';
-import { settingsIpc } from '@/ipc/settings';
-import { audioIpc } from '@/ipc/audio';
 
 interface Invocation {
   cmd: string;
@@ -95,10 +86,9 @@ const lensTest = {
     useProjectStore.getState().setDocuments([SEED_DOC_PLAIN] as never);
     useProjectStore.getState().setCodes([]);
     useProjectStore.getState().setAnnotations([]);
-    useProjectStore.getState().setMemos([]);
-    useUiStore.getState().setActiveDocument(null);
-    useUiStore.getState().setActiveCodeViewId(null);
-    useUiStore.getState().clearTextSelection?.();
+    useProjectStore.getState().setMemos([]);      useUiStore.getState().setActiveDocument('doc-text-1');
+      useUiStore.getState().setActiveCodeView(null);
+      useUiStore.getState().clearTextSelection?.();
   },
   // Log a synthetic call (useful for tests that want to assert that
   // mutations triggered the right ordering of IPC calls).
@@ -133,8 +123,7 @@ const tauriInternals = {
         };
         installedCodes.push(newCode);
         // Propagate to projectStore so CodeTree re-renders.
-        useProjectStore.getState().addCodes?.([newCode] as never) ??
-          useProjectStore.getState().setCodes?.([newCode] as never);
+        useProjectStore.getState().addCodes([newCode] as never);
         return newCode as unknown as T;
       }
       case 'codes_get_tree':
@@ -179,6 +168,11 @@ const tauriInternals = {
       case 'search_query': {
         const a = args as { query: string };
         if (!a.query) return [];
+        // Only return a result when the query word actually appears
+        // in the seed document text (case-insensitive substring match).
+        const lower = a.query.toLowerCase();
+        const matches = SEED_TEXT.toLowerCase().includes(lower);
+        if (!matches) return [];
         // Always include at least one result for any non-empty query,
         // and especially highlight "usability" if it matches the seed.
         const snippet = SEED_TEXT.includes(a.query)
@@ -197,7 +191,14 @@ const tauriInternals = {
     return 0;
   },
 };
-(window as unknown as { __TAURI_INTERNALS__: typeof tauriInternals }).__TAURI_INTERNALS__ = tauriInternals;
+(window as unknown as { __TAURI_INTERNALS__: typeof tauriInternals }).__TAURI_INTERNALS__ = {
+  // Merge fixture mocks into the pre-module stub (workspace.html sets up
+  // convertFileSrc + basic invoke before any ESM import evaluates).
+  // Overwriting the entire object would drop convertFileSrc, crashing
+  // components like DocumentEditor/ImageViewer that call it at render time.
+  ...window.__TAURI_INTERNALS__,
+  ...tauriInternals,
+};
 
 // 3. Stub the Tauri plugin helpers that some components import but
 // aren't needed for the fixture. Returning promises keeps every caller

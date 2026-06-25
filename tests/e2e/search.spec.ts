@@ -40,8 +40,9 @@ test.describe('Search', () => {
     // Type a word that exists in the document.
     await page.getByPlaceholder('Search documents and memos...').fill('usability');
 
-    // Results should appear (debounced 200ms).
-    await expect(page.getByText('Documents')).toBeVisible({ timeout: 5000 });
+    // Results should appear (debounced 200ms). The search dialog
+    // renders a <h3>Documents</h3> heading for document results.
+    await expect(page.locator('[role="dialog"]').getByText('Documents')).toBeVisible({ timeout: 5000 });
 
     // The document title should appear as a result button.
     await expect(page.getByRole('button', { name: /Test Interview Transcript/ })).toBeVisible();

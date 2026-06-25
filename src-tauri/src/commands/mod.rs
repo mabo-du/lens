@@ -1,4 +1,6 @@
+pub mod analytics;
 pub mod annotations;
+pub mod audio;
 pub mod backup;
 pub mod codes;
 pub mod documents;

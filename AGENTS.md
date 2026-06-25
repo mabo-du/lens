@@ -15,7 +15,7 @@ npm run build
 charter doctor
 ```
 
-Pre-commit (`.githooks/pre-commit`) runs tsc + cargo test + charter doctor. CI: ubuntu, includes `cargo clippy -D warnings`. Launch: `npm run tauri dev`.
+Pre-commit (`.githooks/pre-commit`) runs `tsc --noEmit` + `cargo clippy -D warnings --features sqlcipher` + `cargo test --features sqlcipher`. CI: ubuntu, includes `cargo clippy -D warnings`. Launch: `npm run tauri dev`.
 
 ## Off-Limits
 

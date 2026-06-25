@@ -16,6 +16,7 @@ interface ProjectState {
   setDocuments: (docs: DocumentRecord[]) => void;
   addDocuments: (docs: DocumentRecord[]) => void;
   setCodes: (codes: CodeTreeNode[]) => void;
+  addCodes: (codes: CodeTreeNode[]) => void;
   setAnnotations: (annotations: AnnotationRecord[]) => void;
   addAnnotation: (annotation: AnnotationRecord) => void;
   removeAnnotation: (id: string) => void;
@@ -36,6 +37,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
   setDocuments: (docs) => set({ documents: docs }),
   addDocuments: (docs) => set((state) => ({ documents: [...state.documents, ...docs] })),
   setCodes: (codes) => set({ codes: codes }),
+  addCodes: (codes) => set((state) => ({ codes: [...state.codes, ...codes] })),
   setAnnotations: (annotations) => set({ annotations }),
   addAnnotation: (annotation) => set((state) => ({ 
     annotations: [...state.annotations, annotation] 
