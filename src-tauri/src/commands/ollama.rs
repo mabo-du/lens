@@ -50,7 +50,6 @@ struct CodeRow {
     id: String,
     name: String,
     description: Option<String>,
-    color: String,
 }
 
 const OLLAMA_URL: &str = "http://localhost:11434/api/generate";
@@ -94,7 +93,7 @@ pub async fn autocode_chunk(
     .unwrap_or_else(|| DEFAULT_MODEL.to_string());
 
     let codes: Vec<CodeRow> = sqlx::query_as(
-        "SELECT id, name, description, color FROM code WHERE project_id = ? ORDER BY name",
+        "SELECT id, name, description FROM code WHERE project_id = ? ORDER BY name",
     )
     .bind(&project_id)
     .fetch_all(pool)

@@ -199,6 +199,94 @@ pub fn derive_passphrase_key(passphrase: &str) -> String {
     hex::encode(hasher.finalize())
 }
 
+
+/// Periodic WAL checkpoint + autosave API.
+///
+/// `autosave_checkpoint` is the user-callable wrapper that takes a
+/// `SqlitePool` and forces a `PRAGMA wal_checkpoint(TRUNCATE)`. Returns
+/// the number of WAL frames archived (a.k.a. pages) so callers can log
+/// or assert on it.
+///
+/// **Why this public API exists.** The migration runner enables WAL mode
+/// (`journal_mode = WAL`, `synchronous = NORMAL`) for every project at
+/// first open. WAL gives concurrent readers + a single writer. The
+/// durability tradeoff is that committed-but-not-yet-checkpointed pages
+/// live in the `-wal` sidecar until either (a) the WAL grows past a
+/// threshold, or (b) a CHECKPOINT is requested.
+///
+/// Without an explicit checkpoint mechanism, two failure modes emerge:
+///
+/// 1. **WAL bloat:** a long-running session that writes continuously
+///    keeps the WAL sidecar growing. After ~1000 pages (the
+///    `wal_autocheckpoint` default) SQLite auto-checkpoints, but a
+///    user-driven checkpoint gives the researcher an explicit
+///    "I closed the loop on this work" affordance.
+///
+/// 2. **Stale `-wal` files after a forced quit:** if a user kills the
+///    app between a successful commit and the auto-checkpoint,
+///    `*.qdaproj-wal` survives in the project folder. A subsequent
+///    LENS open runs normal SQLite recovery and replays the WAL
+///    transparently, but the sidecar file is confusing in
+///    `ls -la project/`. Truncate-checkpointing aggressively on
+///    shutdown or `File > Close Project` eliminates the sidecar.
+///
+/// **Caller contract.** `pool` must come from `init_db`. Other pools
+/// (test fixtures) work fine. This function does NOT spawn a
+/// background task; it is a synchronous on-`tokio::task::spawn` opt-in
+/// for `lens::run()` callers that want periodic checkpoints or a
+/// close-time flush.
+pub async fn autosave_checkpoint(pool: &SqlitePool) -> Result<i64, String> {
+    // PRAGMA wal_checkpoint(TRUNCATE) returns a 3-tuple: (busy, log_pages, checkpointed_pages).
+    // `query_as<(i64, i64, i64)>` consumes the full PRAGMA result row.
+    let row: (i64, i64, i64) = sqlx::query_as("PRAGMA wal_checkpoint(TRUNCATE)")
+        .fetch_one(pool)
+        .await
+        .map_err(|e| format!("autosave_checkpoint failed: {}", e))?;
+    let busy = row.0;
+    let checkpointed_pages = row.2;
+    if busy != 0 {
+        // A `busy` return means another connection has uncommitted writes — not an
+        // error, just informational. Surfacing it lets a future operator looking
+        // at logs see the busy state and understand why a "hard checkpoint" was
+        // rolled back to a passive one.
+        log::warn!(
+            target: "lens::db",
+            "autosave_checkpoint returned busy=1 ({} pages waiting); checkpointed pages: {}",
+            row.1, checkpointed_pages
+        );
+    }
+    Ok(checkpointed_pages)
+}
+
+/// Insert-or-update a project_settings row. Used by `autosave` callers
+/// that want to remember the last successful checkpoint timestamp so
+/// the user can see when their work was last "durably flushed".
+///
+/// **Why exposed publicly.** Putting this helper next to
+/// `autosave_checkpoint` means callers (UI's `View > Show last
+/// checkpoint` indicator, future background autosave task) have one
+/// canonical way to write into the KDF-version-and-related-settings
+/// table without duplicating the SQL text from db::migrations.
+pub async fn set_project_setting(
+    pool: &SqlitePool,
+    key: &str,
+    value: &str,
+) -> Result<(), String> {
+    if key.is_empty() {
+        return Err("project_settings key must not be empty".to_string());
+    }
+    sqlx::query(
+        "INSERT INTO project_settings (key, value) VALUES (?, ?) \
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, \
+         updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')",
+    )
+    .bind(key)
+    .bind(value)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("set_project_setting({key}) failed: {}", e))?;
+    Ok(())
+}
 #[cfg(test)]
 mod tests {
     //! **Scope of these tests.** All `init_db_*` tests exercise the
@@ -864,90 +952,3 @@ mod tests {
     }
 }
 
-/// Periodic WAL checkpoint + autosave API.
-///
-/// `autosave_checkpoint` is the user-callable wrapper that takes a
-/// `SqlitePool` and forces a `PRAGMA wal_checkpoint(TRUNCATE)`. Returns
-/// the number of WAL frames archived (a.k.a. pages) so callers can log
-/// or assert on it.
-///
-/// **Why this public API exists.** The migration runner enables WAL mode
-/// (`journal_mode = WAL`, `synchronous = NORMAL`) for every project at
-/// first open. WAL gives concurrent readers + a single writer. The
-/// durability tradeoff is that committed-but-not-yet-checkpointed pages
-/// live in the `-wal` sidecar until either (a) the WAL grows past a
-/// threshold, or (b) a CHECKPOINT is requested.
-///
-/// Without an explicit checkpoint mechanism, two failure modes emerge:
-///
-/// 1. **WAL bloat:** a long-running session that writes continuously
-///    keeps the WAL sidecar growing. After ~1000 pages (the
-///    `wal_autocheckpoint` default) SQLite auto-checkpoints, but a
-///    user-driven checkpoint gives the researcher an explicit
-///    "I closed the loop on this work" affordance.
-///
-/// 2. **Stale `-wal` files after a forced quit:** if a user kills the
-///    app between a successful commit and the auto-checkpoint,
-///    `*.qdaproj-wal` survives in the project folder. A subsequent
-///    LENS open runs normal SQLite recovery and replays the WAL
-///    transparently, but the sidecar file is confusing in
-///    `ls -la project/`. Truncate-checkpointing aggressively on
-///    shutdown or `File > Close Project` eliminates the sidecar.
-///
-/// **Caller contract.** `pool` must come from `init_db`. Other pools
-/// (test fixtures) work fine. This function does NOT spawn a
-/// background task; it is a synchronous on-`tokio::task::spawn` opt-in
-/// for `lens::run()` callers that want periodic checkpoints or a
-/// close-time flush.
-pub async fn autosave_checkpoint(pool: &SqlitePool) -> Result<i64, String> {
-    // PRAGMA wal_checkpoint(TRUNCATE) returns a 3-tuple: (busy, log_pages, checkpointed_pages).
-    // `query_as<(i64, i64, i64)>` consumes the full PRAGMA result row.
-    let row: (i64, i64, i64) = sqlx::query_as("PRAGMA wal_checkpoint(TRUNCATE)")
-        .fetch_one(pool)
-        .await
-        .map_err(|e| format!("autosave_checkpoint failed: {}", e))?;
-    let busy = row.0;
-    let checkpointed_pages = row.2;
-    if busy != 0 {
-        // A `busy` return means another connection has uncommitted writes — not an
-        // error, just informational. Surfacing it lets a future operator looking
-        // at logs see the busy state and understand why a "hard checkpoint" was
-        // rolled back to a passive one.
-        log::warn!(
-            target: "lens::db",
-            "autosave_checkpoint returned busy=1 ({} pages waiting); checkpointed pages: {}",
-            row.1, checkpointed_pages
-        );
-    }
-    Ok(checkpointed_pages)
-}
-
-/// Insert-or-update a project_settings row. Used by `autosave` callers
-/// that want to remember the last successful checkpoint timestamp so
-/// the user can see when their work was last "durably flushed".
-///
-/// **Why exposed publicly.** Putting this helper next to
-/// `autosave_checkpoint` means callers (UI's `View > Show last
-/// checkpoint` indicator, future background autosave task) have one
-/// canonical way to write into the KDF-version-and-related-settings
-/// table without duplicating the SQL text from db::migrations.
-pub async fn set_project_setting(
-    pool: &SqlitePool,
-    key: &str,
-    value: &str,
-) -> Result<(), String> {
-    if key.is_empty() {
-        return Err("project_settings key must not be empty".to_string());
-    }
-    sqlx::query(
-        "INSERT INTO project_settings (key, value) VALUES (?, ?) \
-         ON CONFLICT(key) DO UPDATE SET value = excluded.value, \
-         updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')",
-    )
-    .bind(key)
-    .bind(value)
-    .execute(pool)
-    .await
-    .map_err(|e| format!("set_project_setting({key}) failed: {}", e))?;
-    Ok(())
-}

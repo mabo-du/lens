@@ -119,7 +119,7 @@ fn validate_polygon(vertices_json: &str) -> Result<Vec<Vec<f64>>, String> {
         if !x.is_finite() || !y.is_finite() {
             return Err(format!("vertex {} has non-finite coordinates", i));
         }
-        if x < -SLACK || x > 1.0 + SLACK || y < -SLACK || y > 1.0 + SLACK {
+        if !(-SLACK..=1.0 + SLACK).contains(&x) || !(-SLACK..=1.0 + SLACK).contains(&y) {
             return Err(format!(
                 "vertex {} out of [0.0, 1.0] range (got [{}, {}])",
                 i, x, y
