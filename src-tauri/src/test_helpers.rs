@@ -16,7 +16,7 @@ pub async fn setup_test_state() -> (AppState, tempfile::TempDir) {
     let state = AppState {
         db: RwLock::new(Some(pool)),
         project_folder: RwLock::new(Some(temp_dir.path().to_path_buf())),
-        encryption_key: RwLock::new(None),
+        encryption_key: RwLock::new(crate::commands::projects::DbKey::default()),
     };
 
     (state, temp_dir)

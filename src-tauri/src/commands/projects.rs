@@ -5,10 +5,112 @@ use tauri::{command, AppHandle, State};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
+/// Wrapper around `Option<String>` enforcing the v0.1.4 invariant:
+/// `Some` holds a 64-char lowercase hex string (the output of
+/// `db::derive_passphrase_key`). `None` means no encrypted project is
+/// open. Construction goes through `DbKey::from_passphrase` (which
+/// hashes the raw user passphrase at the IPC boundary) or
+/// `DbKey::from_hex` (which strictly validates the 64-char shape). The
+/// raw user passphrase cannot reach `state.encryption_key` by any
+/// other construction path — the type system guarantees it.
+///
+/// `Default` produces `DbKey(None)`, which is what every AppState
+/// slot is initialised with via `RwLock::new(DbKey::default())` in
+/// `main.rs` / `test_helpers.rs` / `tests.rs` / `commands/import.rs`.
+#[derive(Clone, Default)]
+pub struct DbKey(pub(crate) Option<String>);
+
+impl DbKey {
+    /// Hash a raw user passphrase into the canonical 64-char hex form.
+    /// `None` round-trips to `DbKey(None)`. An empty `Some("")` is
+    /// rejected so callers don't silently produce an unreadable db
+    /// (SQLCipher would accept `PRAGMA key=''` and write a ciphertext
+    /// that can never be decrypted).
+    pub fn from_passphrase(raw: Option<&str>) -> Result<Self, String> {
+        match raw {
+            None => Ok(DbKey(None)),
+            Some(p) if p.is_empty() => {
+                Err("Encryption passphrase must not be empty".to_string())
+            }
+            Some(p) => Ok(DbKey(Some(crate::db::derive_passphrase_key(p)))),
+        }
+    }
+
+    /// Strict validation when constructing from an already-derived hex
+    /// (used by tests and any future seeder path). Rejects anything that
+    /// isn't exactly 64 lowercase hex chars — built so a future bug
+    /// producing uppercase or short-form hex is caught at the type
+    /// boundary rather than later at `init_db`.
+    pub fn from_hex(hex: Option<String>) -> Result<Self, String> {
+        match hex {
+            None => Ok(DbKey(None)),
+            Some(s)
+                if s.len() != 64
+                    || !s
+                        .chars()
+                        .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()) =>
+            {
+                Err(format!(
+                    "DbKey hex must be exactly 64 lowercase hex chars; got len={}",
+                    s.len()
+                ))
+            }
+            Some(s) => Ok(DbKey(Some(s))),
+        }
+    }
+
+    /// Read-only view into the derived hex; consumed by `init_db`.
+    pub fn as_deref(&self) -> Option<&str> {
+        self.0.as_deref()
+    }
+
+    pub fn is_some(&self) -> bool {
+        self.0.is_some()
+    }
+}
+
+// Hand-written `Debug` impl: derive-based Debug would print the
+// full 64-char inner hex via `dbg!()` / `format!("{:?}", ..)` /
+// `tracing::debug!{?key}` / anyhow's panic-message rendering,
+// defeating the truncated Display stance. Delegating to Display
+// keeps `dbg!` ergonomic while closing the leak vector.
+impl std::fmt::Debug for DbKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+impl std::fmt::Display for DbKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.0 {
+            // Never log the full hex — process logs persist and a
+            // determined attacker with log access is one step away from
+            // an offline-brute-force tool.
+            // F1 v0.1.4 round-3: clean single-block arm, replaces
+            // the broken split-write!( shape produced by the
+            // partial inline replacement. Char-based slicing
+            // (`chars().take(8)`) rather than byte `get(..8)` so
+            // a malformed UTF-8 inner string cannot panic at a
+            // slice boundary. `<short[len=N]>` carries the
+            // actual char count for log triagability.
+            Some(hex) => {
+                let chars_n = hex.chars().count();
+                let slice_n: String = hex.chars().take(8).collect();
+                if chars_n >= 8 {
+                    write!(f, "<DbKey hex=…{}>", slice_n)
+                } else {
+                    write!(f, "<DbKey hex=…<short[len={}]>>", chars_n)
+                }
+            },
+            None => write!(f, "<DbKey None>"),
+        }
+    }
+}
+
 pub struct AppState {
     pub db: RwLock<Option<SqlitePool>>,
     pub project_folder: RwLock<Option<PathBuf>>,
-    pub encryption_key: RwLock<Option<String>>,
+    pub encryption_key: RwLock<DbKey>,
 }
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
@@ -141,7 +243,29 @@ pub async fn projects_create_internal(
     std::fs::create_dir_all(&assets_dir)
         .map_err(|e| format!("Failed to create assets directory: {}", e))?;
 
-    // Write .encrypted flag file if encryption is enabled
+    // Encryption is gated behind the `sqlcipher` Cargo feature because
+    // PRAGMA key is silently ignored by plain SQLite. Refusing to opt-in
+    // via this build keeps users from creating a project marked
+    // `.encrypted` whose database is actually plaintext on disk — a
+    // security regression we explicitly don't want.
+    //
+    // When SQLCipher linkage is wired (cargo build --features sqlcipher)
+    // the PRAGMA key call in `db::init_db` will actually encrypt, and
+    // `.encrypted` becomes a meaningful intent + reality flag.
+    #[cfg(not(feature = "sqlcipher"))]
+    if encryption_key.is_some() {
+        return Err(
+            "Encryption is not available in this LENS build. The project \
+             must be compiled with `cargo build --features sqlcipher` (which \
+             additionally requires libsqlcipher on the system). Until then, \
+             create the project without a password."
+                .to_string(),
+        );
+    }
+
+    // Write .encrypted flag file if encryption is enabled AND the
+    // sqlcipher feature is active.
+    #[cfg(feature = "sqlcipher")]
     if encryption_key.is_some() {
         let flag_path = project_dir.join(".encrypted");
         std::fs::write(&flag_path, "1")
@@ -150,8 +274,26 @@ pub async fn projects_create_internal(
 
     let db_path = project_dir.join("project.qdaproj");
 
-    let pool = crate::db::init_db(&db_path, encryption_key.as_deref()).await?;
-    *state.encryption_key.write().await = encryption_key;
+    // v0.1.4 type-system enforcement. `DbKey::from_passphrase` hashes
+    // raw \u2192 64-char hex at the IPC boundary; combined with `AppState`'s
+    // `RwLock<DbKey>` field type, the raw passphrase
+    // (`encryption_key: Option<String>` here as the public IPC shape)
+    // cannot reach `state.encryption_key` by any path — only `DbKey::Some(hex)`
+    // can. On success the hex lives in state for the project's open
+    // lifetime; later consumers
+    // (`commands::qdpx_import::qdpx_import_undo_internal`, e.g.) read
+    // it directly via `.as_deref()`.
+    // v0.1.4 ordering fix (caught by code-review). Clear state BEFORE
+    // `from_passphrase` so an empty-passphrase Err leaves
+    // `state.encryption_key` at `DbKey(None)` rather than at the
+    // stale hex from a previously-open Project A. The clear-then-set
+    // pattern's whole purpose was to prevent stale-state leakage across
+    // projects; the newtype refactor accidentally inverted the order.
+    *state.encryption_key.write().await = DbKey(None);
+    let key = DbKey::from_passphrase(encryption_key.as_deref())?;
+
+    let pool = crate::db::init_db(&db_path, key.as_deref()).await?;
+    *state.encryption_key.write().await = key;
 
     let id = Uuid::new_v4().to_string();
 
@@ -206,8 +348,62 @@ pub async fn projects_open(
         return Err("Project database not found".to_string());
     }
 
-    let pool = crate::db::init_db(&db_path, encryption_key.as_deref()).await?;
-    *state.encryption_key.write().await = encryption_key;
+    // Pre-check on the `.encrypted` flag: if the project folder claims
+    // it is encrypted but the caller has not provided a passphrase,
+    // surface a clear prompt before letting `init_db` hit SQLCipher.
+    // Without this, the user would see SQLCipher's raw "file is not a
+    // database" error (raised when SQLCipher's header check on a
+    // ciphertext file fails before PRAGMA key is even issued).
+    let is_encrypted = project_path.join(".encrypted").exists();
+    if is_encrypted && encryption_key.is_none() {
+        return Err(
+            "This project is encrypted. Please enter the encryption \
+             passphrase to open it."
+                .to_string(),
+        );
+    }
+
+    // v0.1.4 type-system enforcement. `DbKey::from_passphrase` hashes
+    // raw \u2192 64-char hex at the IPC boundary. See the same block in
+    // `projects_create_internal` for the v0.1.4 invariants.
+    // v0.1.4 ordering fix (caught by code-review). Same rationale as
+    // `projects_create_internal` immediately above: clear state first
+    // so an empty-passphrase Err leaves state as `DbKey(None)`,
+    // not the stale hex from a prior project.
+    *state.encryption_key.write().await = DbKey(None);
+    let key = DbKey::from_passphrase(encryption_key.as_deref())?;
+
+    let pool = crate::db::init_db(&db_path, key.as_deref())
+        .await
+        .map_err(|e| {
+            // Translate SQLCipher's ciphertext-shape errors into a user-facing
+            // "incorrect encryption passphrase" message. This branch only
+            // runs when the `.encrypted` flag is present (otherwise we
+            // can't conclude the failure is key-related), AND when the
+            // caller DID supply a key — so a failure now means either
+            // the key is wrong or the database is corrupt. We append the
+            // original error for debuggability but lead with the clear
+            // human-readable cause.
+            if is_encrypted {
+                let lower = e.to_lowercase();
+                let key_like = lower.contains("not a database")
+                    || lower.contains("encrypted")
+                    || lower.contains("file is not")
+                    || lower.contains("invalid");
+                if key_like {
+                    // Intentionally short: the raw SQLCipher/SQLite
+                    // error string can leak file paths, capability
+                    // names, or fragments of ciphertext. Keep the
+                    // user-facing message terse; if richer diagnostics
+                    // are needed, log the underlying `e` server-side
+                    // via `tracing` or the equivalent.
+                    return "Incorrect encryption passphrase (or the database is corrupted)."
+                        .to_string();
+                }
+            }
+            e
+        })?;
+    *state.encryption_key.write().await = key;
 
     // Auto-create local_user if missing (handles projects created before
     // the §1.5 fix landed).
@@ -311,8 +507,171 @@ pub async fn local_user_update_name(
 
 #[command]
 pub async fn projects_close(state: State<'_, AppState>) -> Result<(), String> {
+    // Fire a final WAL checkpoint before releasing the pool so no stale
+    // -wal sidecar survives the close. Best-effort: a failing checkpoint
+    // should not block the close (the pool will be dropped regardless).
+    if let Some(ref pool) = *state.db.read().await {
+        if let Err(e) = crate::db::autosave_checkpoint(pool).await {
+            log::warn!(target: "lens::db", "close-time checkpoint failed: {e}");
+        }
+    }
     *state.db.write().await = None;
     *state.project_folder.write().await = None;
-    *state.encryption_key.write().await = None;
+    *state.encryption_key.write().await = DbKey(None);
     Ok(())
+}
+
+
+#[cfg(test)]
+mod dbkey_tests {
+    //! Exercises DbKey invariants: constructor validation, Display
+    //! panic-freedom on short inner strings, exact rendering, and
+    //! Debug-leak closure. Runs without the `sqlcipher` feature.
+
+    use super::DbKey;
+
+    fn canonical_hex(seed: u8) -> String {
+        let bytes: Vec<u8> = (0..32).map(|i| seed.wrapping_add(i as u8)).collect();
+        bytes.iter().map(|b| format!("{:02x}", b)).collect()
+    }
+
+    /// Round-trip a valid passphrase: output is exactly 64 lowercase
+    /// hex and is deterministic.
+    #[test]
+    fn from_passphrase_produces_64_lowercase_hex() {
+        let k = DbKey::from_passphrase(Some("hello-world"))
+            .expect("non-empty passphrase");
+        let h = k.as_deref().expect("Some");
+        assert_eq!(h.len(), 64, "SHA-256 hex is 64 chars");
+        assert!(
+            h.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()),
+            "lowercase hex only"
+        );
+        let k2 = DbKey::from_passphrase(Some("hello-world")).unwrap();
+        assert_eq!(k.as_deref(), k2.as_deref(), "deterministic");
+    }
+
+    /// Empty passphrase rejected (PRAGMA key='' would silently write
+    /// undecryptable ciphertext).
+    #[test]
+    fn from_passphrase_rejects_empty() {
+        assert!(DbKey::from_passphrase(Some("")).is_err());
+    }
+
+    /// `None` round-trips to `DbKey(None)`.
+    #[test]
+    fn from_passphrase_accepts_none() {
+        let k = DbKey::from_passphrase(None).expect("None valid");
+        assert!(!k.is_some());
+        assert_eq!(k.as_deref(), None);
+    }
+
+    /// `from_hex` accepts valid 64-char lowercase hex.
+    #[test]
+    fn from_hex_accepts_64_lowercase_hex() {
+        let h = canonical_hex(0);
+        let k = DbKey::from_hex(Some(h.clone())).expect("valid hex");
+        assert_eq!(k.as_deref(), Some(h.as_str()));
+    }
+
+    /// `from_hex` rejects uppercase, wrong length, and empty.
+    #[test]
+    fn from_hex_rejects_invalid() {
+        let mut h = canonical_hex(0);
+        h.replace_range(0..1, "A");
+        assert!(DbKey::from_hex(Some(h)).is_err(), "uppercase rejected");
+
+        assert!(DbKey::from_hex(Some("a".repeat(63))).is_err(), "63 chars");
+        assert!(DbKey::from_hex(Some("a".repeat(65))).is_err(), "65 chars");
+        assert!(DbKey::from_hex(Some(String::new())).is_err(), "empty");
+    }
+
+    /// **REGRESSION** -- Display::fmt must NOT panic on a short inner
+    /// string. Pre-v0.1.4-round2 did `&hex[..8]` which panics on
+    /// len<8. Two-layer fix: (a) `pub(crate)` field; (b) `get(..8)`.
+    /// This test asserts (b) holds for several short lengths including
+    /// the 7-char boundary at which `&s[..8]` would panic.
+    #[test]
+    fn display_does_not_panic_on_short_inner_string() {
+        let empty = DbKey(Some(String::new()));
+        let rendered = format!("{}", empty);
+        // F1 v0.1.4 round-3: anchor on the literal "<short[" prefix
+        // (no other site produces it now that the sentinel carries len).
+        assert!(rendered.contains("<short["),
+                "expected <short[len=N]> sentinel, got: {rendered}");
+        assert!(!rendered.contains("byte index"),
+                "must not include panic message, got: {rendered}");
+
+        let three = DbKey(Some("123".to_string()));
+        let rendered3 = format!("{}", three);
+        assert!(rendered3.contains("<short["), "3-char must use <short[len=N]> sentinel, got: {rendered3}");
+
+        let seven = DbKey(Some("1234567".to_string()));
+        let rendered7 = format!("{}", seven);
+        assert!(rendered7.contains("<short["), "7-char must use <short[len=N]> sentinel, got: {rendered7}");
+    }
+
+    /// Display renders the first 8 hex chars after the ellipsis.
+    /// Built from `format!("{:02x}", 0..32)` -> "00010203...".
+    #[test]
+    fn display_renders_first_8_chars_of_valid_hex() {
+        let seed_hex: String = (0..32).map(|i| format!("{:02x}", i)).collect();
+        assert_eq!(seed_hex.len(), 64);
+        let k = DbKey(Some(seed_hex));
+        let rendered = format!("{}", k);
+        // Structural assertions to keep this robust.
+        assert!(rendered.starts_with("<DbKey hex="), "got: {rendered}");
+        assert!(rendered.ends_with("00010203>"), "got: {rendered}");
+        // Rust char literal `'\u{2026}'` uses braces per Rust's documented
+        // escape syntax; the compiler resolves it to U+2026 at parse time.
+        assert!(rendered.contains('\u{2026}'),
+                "expected ellipsis (U+2026) in Display, got: {rendered}");
+    }
+
+    /// Display for the None variant.
+    #[test]
+    fn display_for_none() {
+        let k = DbKey(None);
+        assert_eq!(format!("{}", k), "<DbKey None>");
+    }
+
+    /// **REGRESSION** -- Debug MUST NOT leak the full 64-char hex.
+    /// A future contributor who re-adds `#[derive(Debug)]` will fail
+    /// this test: `{:?}` would print `DbKey(Some("0123...full..."))`
+    /// instead of the truncated Display form.
+    #[test]
+    fn debug_does_not_leak_full_hex() {
+        let k = DbKey::from_passphrase(Some("leak-test-pass"))
+            .expect("non-empty");
+        let debug_rendered = format!("{:?}", k);
+        let display_rendered = format!("{}", k);
+
+        // (1) Delegation contract.
+        assert_eq!(
+            debug_rendered, display_rendered,
+            "Debug must delegate to Display: debug={debug_rendered}              vs display={display_rendered}"
+        );
+
+        // (2) Full hex must NOT appear anywhere in Debug output.
+        let full_hex = k.as_deref().unwrap();
+        assert!(
+            !debug_rendered.contains(full_hex),
+            "Debug must NOT print the full 64-char hex, got: {debug_rendered}"
+        );
+
+        // (3) Output length budget: well under any plausible hash prefix.
+        assert!(
+            debug_rendered.len() < 32,
+            "Debug output should be the truncated Display form              (<~30 chars), got len={}: {debug_rendered}",
+            debug_rendered.len()
+        );
+    }
+
+    /// `Default` produces `DbKey(None)` (matches fresh AppState slots).
+    #[test]
+    fn default_is_none() {
+        let k = DbKey::default();
+        assert!(!k.is_some());
+        assert_eq!(k.as_deref(), None);
+    }
 }

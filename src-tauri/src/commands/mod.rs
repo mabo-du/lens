@@ -1,11 +1,15 @@
 pub mod annotations;
+pub mod backup;
 pub mod codes;
 pub mod documents;
+pub mod encryption;
 pub mod export;
 pub mod image_polygons;
 pub mod image_regions;
 pub mod import;
 pub mod memos;
+pub mod ollama;
+pub mod project_settings;
 pub mod projects;
 pub mod qdpx_import;
 pub mod sample_project;

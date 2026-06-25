@@ -23,7 +23,9 @@ hooks:
   toolchain: javascript
   pre-commit:
     - npx tsc --noEmit
-    - '(cd src-tauri && cargo test)'
+    - '(cd src-tauri && cargo test --features sqlcipher)'
+    - charter doctor
   pre-push:
     - npx tsc --noEmit
-    - '(cd src-tauri && cargo test)'
+    - '(cd src-tauri && cargo test --features sqlcipher)'
+    - charter doctor

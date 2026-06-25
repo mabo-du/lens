@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
-# Pre-commit hook for LENS.
-# Wire it in once after cloning with:
-#   git config core.hooksPath .githooks
-# Then chmod +x .githooks/pre-commit so it's executable.
-#
-# Note: we intentionally run `cargo test` (not `cargo test --locked`) here
-# because adding a new dev-dependency locally refreshes Cargo.lock, and
-# `--locked` would block the commit unnecessarily. CI uses `--locked`
-# for reproducibility in `.github/workflows/ci.yml`.
+# Charter-mandated pre-commit hook (charter.yaml: policy.hooks.pre-commit).
+#   1. npx tsc --noEmit
+#   2. (cd src-tauri && cargo test --features sqlcipher)
+#   3. charter doctor (gating, non-fatal on >= threshold)
+#   4. aislop scan (informational, never blocks)
 
 set -euo pipefail
+echo "[pre-commit] running gates..."
 
-echo "[pre-commit] Running typecheck..."
+echo "[pre-commit] 1/4 TypeScript: npx tsc --noEmit"
 npx tsc --noEmit
 
-echo "[pre-commit] Running cargo test (src-tauri)..."
-(
-  cd src-tauri
-  cargo test
-)
+echo "[pre-commit] 2/4 Rust:    cargo test  (sqlcipher feature)"
+(cd src-tauri && cargo test --features sqlcipher)
+
+echo "[pre-commit] 3/4 charter doctor"
+charter doctor  # blocks commit when score drops below 80
+
+echo "[pre-commit] 4/4 aislop scan (informational)"
+aislop scan || echo "[pre-commit] aislop issues found (non-blocking)"
 
 echo "[pre-commit] OK"

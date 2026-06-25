@@ -2,37 +2,42 @@
 
 ## Stack
 
-React 19 + Vite 7 + TS strict (`@/*` -> `src/*`). UI: Tailwind v4, `react-resizable-panels` v4, Zustand, ProseMirror, `cmdk`. Backend: Tauri 2 + Rust (sqlx SQLite); PDF text via pdfplumber sidecar, DOCX native (`src-tauri/src/import/docx.rs`). IPC: `src/ipc/*` thin `invoke()` wrappers; types mirror Rust `#[serde(rename_all = "camelCase")]`.
+React 19 + Vite 7 + TS strict (`@/*` → `src/*`). UI: Tailwind v4, react-resizable-panels, Zustand, ProseMirror, cmdk. Backend: Tauri 2 + Rust (sqlx SQLite, reqwest); PDF via pdfplumber sidecar, DOCX native. IPC: `src/ipc/*` thin `invoke()` wrappers. Optional: Ollama auto-coding.
 
 ## Verification (run before any commit)
 
 ```
-npx tsc --noEmit                              # TS strict
-(cd src-tauri && cargo test)                  # Rust unit + integration (43 pass)
-npx vitest run                                # vitest (13 pass: QDPX round-trip + offset utils + colour-fallback + mammoth-removal regression)
-npm run build                                 # tsc && vite build
-charter doctor                                # Charter conformance gate
+npx tsc --noEmit
+(cd src-tauri && cargo test --features sqlcipher)   # 119 pass
+npx vitest run                                       # 73 pass / 7 files
+npm run build
+charter doctor
 ```
 
-Pre-commit (`githooks/pre-commit`) runs the first two. CI matrix: ubuntu/windows/macos. **Launch:** `npm run tauri dev` — `npm run dev` is vite-only without Tauri bindings.
+Pre-commit (`.githooks/pre-commit`) runs tsc + cargo test + charter doctor. CI: ubuntu. Launch: `npm run tauri dev`.
+
+## Off-Limits
+
+**Never edit these without explicit user approval:**
+- `.github/workflows/ci.yml` — CI pipeline
+- `.env.example` — template only; never commit real secrets
+- `src-tauri/tauri.conf.json` — signing/updater config
+- `src-tauri/src/db/migrations/*.sql` — on-disk file format; add NEW migrations only
+- `charter.yaml` — policy gate
+- `package.json` deps — major bumps must re-run full test suite before merge
+
+**Rules:**
+- Use `exporterRegistry` (`src/export/QdpxExporter.ts`) for REFI-QDA, don't roll your own
+- Don't bump `@tauri-apps/api` major or `@xmldom/xmldom` without the QDPX vitest round-trip
 
 ## History reshaping rule
 
-Before any `git reset --soft` or `git rebase -i` that DROPS or MERGES commits (i.e., loses commit content), *or any history-modifying tool that rewrites commit objects* (`git filter-repo`, `git replace`, BFG repo cleaner, etc.), first run `git branch backup-pre-reshape HEAD~N` (where N is the depth of the rewrite). Recovery via `git fsck --unreachable` after `gc` is fragile; a labelled backup branch always recovers. *Excludes:* pure re-order (`rebase -i` reorder preserves content), `commit --amend` (no commit destruction), and cherry-pick (linear).
-
-## Off-Limits (MVP)
-
-- Edit `migrations/*.sql` directly — add a new migration. Schema is also the on-disk file format.
-- Roll your own REFI-QDA export/import — use `exporterRegistry` in `src/export/QdpxExporter.ts`.
-- Bump `@tauri-apps/api` major or `@xmldom/xmldom` without re-running the QDPX vitest round-trip.
-- `projectsIpc.createSample` populates a demo on first run — treat as a sandbox; clear via the project menu before research coding.
-
+Before `git reset --soft`, `git rebase -i` that drops/merges commits, or any history-rewriting tool, run `git branch backup-pre-reshape HEAD~N`. Excludes: pure re-order, `commit --amend`, cherry-pick.
 
 ## GitNexus (MCP)
 
 Use `gitnexus_query`/`gitnexus_impact`/`gitnexus_context` before editing;
-`gitnexus_detect_changes()` before each commit. HIGH/CRITICAL blast radius =
-pause and warn the user.
+`gitnexus_detect_changes()` before each commit. HIGH/CRITICAL blast radius → pause and warn.
 
 <!-- gitnexus:start -->
 <!-- gitnexus:end -->

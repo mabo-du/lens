@@ -1,0 +1,16 @@
+=== RUN 28091162213 ===
+Wed 24 Jun 2026 20:15:24 AEST
+
+log size: 467 /home/mark/Projects/LENS/ci-artifacts/round83-27cfbec/playwright/playwright-job.log bytes=44800
+
+142:2026-06-24T10:11:48.0022405Z npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+386:2026-06-24T10:12:13.3674434Z Error: tests/e2e/global-setup.mjs: file must export a single function.
+392:2026-06-24T10:12:13.4101268Z Error: tests/e2e/global-teardown.mjs: file must export a single function.
+332:2026-06-24T10:12:02.6201341Z Running kernel seems to be up-to-date.
+384:2026-06-24T10:12:13.3614478Z [2026-06-24T10:12:13.360Z] [lens-e2e] globalSetup entered — artifact log: .lens-e2e/lens-e2e.log
+385:2026-06-24T10:12:13.3616321Z [2026-06-24T10:12:13.361Z] [lens-e2e] (1/2) vite build — fixture compile + React/Konva bundle start
+387:2026-06-24T10:12:13.3920355Z [2026-06-24T10:12:13.390Z] [lens-e2e] globalTeardown entered
+388:2026-06-24T10:12:13.3921912Z [2026-06-24T10:12:13.390Z] [lens-e2e] LENS_E2E_HTTP_PID unset — falling back to pkill
+389:2026-06-24T10:12:13.4093464Z [2026-06-24T10:12:13.409Z] [lens-e2e] no http-server process found (status=1, message=Command failed: pkill -f http-server.*127\.0\.0\.1.*57599) — already clean
+390:2026-06-24T10:12:13.4095156Z [2026-06-24T10:12:13.409Z] [lens-e2e] kill-receipt written to .lens-e2e/kill-receipt.json state=no-process
+391:2026-06-24T10:12:13.4096230Z [2026-06-24T10:12:13.409Z] [lens-e2e] globalTeardown complete

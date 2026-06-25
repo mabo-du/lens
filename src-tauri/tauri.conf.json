@@ -18,7 +18,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost"
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: asset: tauri:; connect-src 'self' ipc: http://ipc.localhost https://cdn.jsdelivr.net https://tessdata.projectnaptha.com; worker-src 'self' blob:; child-src 'self' blob:"
     }
   },
   "bundle": {

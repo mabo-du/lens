@@ -1,0 +1,8 @@
+✗ Build failed in 46ms
+error during build:
+Could not resolve "../../../src/store/projectStore" from "tests/e2e/fixture/src/main.tsx"
+file: /home/mark/Projects/LENS/tests/e2e/fixture/src/main.tsx
+    at getRollupError (file:///home/mark/Projects/LENS/node_modules/rollup/dist/es/shared/parseAst.js:317:41)
+    at error (file:///home/mark/Projects/LENS/node_modules/rollup/dist/es/shared/parseAst.js:313:42)
+    at ModuleLoader.handleInvalidResolvedId (file:///home/mark/Projects/LENS/node_modules/rollup/dist/es/shared/node-entry.js:22144:24)
+    at file:///home/mark/Projects/LENS/node_modules/rollup/dist/es/shared/node-entry.js:22104:26

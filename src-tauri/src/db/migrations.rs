@@ -1,6 +1,6 @@
 use sqlx::{Executor, SqlitePool};
 
-const MIGRATIONS: &[(&str, &str)] = &[
+pub const MIGRATIONS: &[(&str, &str)] = &[
     (
         "01_initial_schema",
         include_str!("migrations/01_initial_schema.sql"),
@@ -24,6 +24,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
     (
         "06_image_polygon",
         include_str!("migrations/06_image_polygon.sql"),
+    ),
+    (
+        "07_project_settings",
+        include_str!("migrations/07_project_settings.sql"),
     ),
 ];
 

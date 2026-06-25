@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Charter-mandated pre-push hook (charter.yaml: policy.hooks.pre-push).
+# Same scripts as pre-commit; gate just-before-remote.
+
+set -euo pipefail
+echo "[pre-push] running gates..."
+
+echo "[pre-push] 1/4 TypeScript: npx tsc --noEmit"
+npx tsc --noEmit
+
+echo "[pre-push] 2/4 Rust:    cargo test --features sqlcipher"
+(cd src-tauri && cargo test --features sqlcipher)
+
+echo "[pre-push] 3/4 charter doctor"
+charter doctor  # blocks push when score drops below 80
+
+echo "[pre-push] 4/4 aislop scan (informational)"
+aislop scan || echo "[pre-push] aislop issues found (non-blocking)"
+
+echo "[pre-push] OK"

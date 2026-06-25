@@ -45,8 +45,9 @@ pub async fn document_delete_internal(state: &AppState, id: String) -> Result<()
             // Best-effort: log failure but don't abort the delete.
             if asset_path.exists() {
                 if let Err(e) = std::fs::remove_file(&asset_path) {
-                    eprintln!(
-                        "Warning: could not delete asset file {:?}: {}",
+                    log::warn!(
+                        target: "lens::commands::documents",
+                        "could not delete asset file {:?}: {}",
                         asset_path, e
                     );
                 }
@@ -110,9 +111,6 @@ pub async fn document_get_asset_base64(
     let folder_guard = state.project_folder.read().await;
     let folder = folder_guard.as_ref().ok_or("No project folder open")?;
 
-    // Match the naming convention used by documents_import_internal's
-    // assets/ copy: <id>.<ext> where ext is derived from original_path
-    // and falls back to file_format if no path was captured.
     let ext = original_path
         .as_deref()
         .and_then(|p| std::path::Path::new(p).extension())

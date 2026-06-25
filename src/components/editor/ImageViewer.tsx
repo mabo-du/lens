@@ -409,8 +409,6 @@ export function ImageViewer({ document }: { document: DocumentRecord }) {
     setCursorPos(r.cursorPos);
   };
 
-  // 13. Right-click on a shape opens the action Dialog (Memo... / Delete).
-  //     (Replaces the previous direct-delete path.)
   const openShapeAction = (selectionId: string, kind: ShapeKind, codeName: string) => {
     setPendingShapeAction({ selectionId, kind, codeName });
   };
