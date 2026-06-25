@@ -104,6 +104,17 @@ jobs:
         run: bash scripts/build-sidecar.sh ${{ matrix.target }}
         shell: bash
 
+      # Round-11 followup (draft release lifecycle): tauri-action creates
+      # a DRAFT GitHub Release on the FIRST successful matrix entry of a
+      # given tag. Subsequent matrix completions of the SAME tag query
+      # that draft and APPEND their assets to it (do NOT re-create). The
+      # release is promoted to non-draft (and `prerelease: false` honoured)
+      # only after the user clicks "Publish release" in the GitHub web UI;
+      # tauri-action itself does NOT auto-publish. If a matrix entry this
+      # run did NOT produce its expected asset (.deb, .AppImage, .dmg,
+      # .exe) the asset is genuinely missing for this run, NOT a
+      # tauri-action bug. Compare with the published list at
+      # https://github.com/mabo-du/lens/releases to triage.
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
@@ -239,18 +250,23 @@ jobs:
           ls -la dist
 
       - name: Publish to PyPI (OIDC trusted-publishing)
-        # IMPORTANT: pypa/gh-action-pypi-publish@v1.14.0 is intentionally
-        # strict about duplicate versions. If `lens-qda==X` is already on
-        # PyPI (e.g., uploaded by an earlier, successful tag push), a
-        # re-tag-force-push of the same tag will FAIL this step with a
-        # 400 `File already exists` from PyPI's JSON upload API. This is
-        # expected, NOT a regression. The wheel already on PyPI is what
-        # users will download. To publish a new version: bump the
-        # version stamp (CHANGELOG entry + package.json + tauri.conf.json
-        # + src-tauri/Cargo.toml version), commit, and create a FRESH
-        # annotated tag (e.g. v0.2.0). Re-uploading a manually-deleted
-        # version via twine is the only escape hatch if you ever need to
-        # overwrite a specific version stamp on PyPI.
+        # IMPORTANT: pypa/gh-action-pypi-publish@v1.14.0 inherits PyPI's
+        # strict duplicate-FILENAME rejection. If a wheel with the same
+        # PEP 427 filename (e.g. `lens_qda-0.2.0rc2-py3-none-any.whl`) is
+        # already on PyPI (e.g. uploaded by an earlier, successful tag
+        # push at the SAME version), a re-tag-force-push of the same tag
+        # will FAIL this step with a 400 `File already exists` from PyPI's
+        # JSON upload API. This is expected, NOT a regression. The wheel
+        # already on PyPI is what users will download. To publish a new
+        # version: bump the version stamp (CHANGELOG entry + package.json +
+        # src-tauri/tauri.conf.json + src-tauri/Cargo.toml version), commit
+        # on top, and create a FRESH annotated tag (e.g. v0.2.0). NB the
+        # constraint is filename-uniqueness, not version-uniqueness: an sdist
+        # upload under an existing lens-qda==0.2.0rc2 version IS permitted
+        # (PyPI rejects same-wheel-filename, not same-version). If you have
+        # to overwrite a specific wheel WITHOUT bumping the version stamp,
+        # delete the existing file via the PyPI web UI (Project > Files >
+        # select file > Options > Delete), then twine upload the new wheel.
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
         with:
           packages-dir: python/dist
