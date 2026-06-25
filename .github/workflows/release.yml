@@ -19,10 +19,17 @@ jobs:
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
             ext: '.exe'
-          - platform: macos-latest
+          # Round-8 fix (PyInstaller is host-only): pin the runner to
+          # match the target triple (macos-13 = Intel x86_64 host,
+          # macos-14 = Apple Silicon host). Previously ``macos-latest''
+          # (Apple Silicon since Apr 2024) was used for BOTH matrix
+          # entries, so the PyInstaller binary was always Apple-
+          # Silicon even when named ``x86_64-apple-darwin`` -> crashes
+          # or fails the bundle when launched on Intel macOS hardware.
+          - platform: macos-13
             target: x86_64-apple-darwin
             ext: ''
-          - platform: macos-latest
+          - platform: macos-14
             target: aarch64-apple-darwin
             ext: ''
 
@@ -40,6 +47,12 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      # Round-9 followup (AppImage prerequisites): `linuxdeploy-plugin-appimage`
+      # (which tauri-action shells out to for the AppImage asset on Linux) links
+      # against libfuse + lzma at bundle-build time. Without these, the .deb
+      # still builds (dpkg packaging only needs libgtk/libwebkit) but the
+      # AppImage asset silently doesn't appear in the release draft. Pull them
+      # in pre-emptively.
       - name: Install system dependencies (Linux)
         if: matrix.platform == 'ubuntu-22.04'
         run: |
@@ -51,39 +64,56 @@ jobs:
             librsvg2-dev \
             libssl-dev \
             libsoup-3.0-dev \
-            libjavascriptcoregtk-4.1-dev
+            libjavascriptcoregtk-4.1-dev \
+            libfuse2 \
+            liblzma-dev
 
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Setup Python (Linux)
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get install -y python3 python3-pip
-          pip3 install pyinstaller
-
-      - name: Setup Python (macOS)
-        if: matrix.platform == 'macos-latest'
-        run: |
-          brew install python3 || true
-          pip3 install pyinstaller
-
-      - name: Setup Python (Windows)
-        if: matrix.platform == 'windows-latest'
-        run: |
-          choco install python3 -y || true
-          pip3 install pyinstaller
+      - name: Setup Python (all platforms)
+        # Replaces the three platform-specific blocks (Linux apt+pip / macOS
+        # brew+pip / Windows choco+pip) that previously failed:
+        #   * macOS — PEP 668 externally-managed-environment when Homebrew
+        #     Python (>3.11) refuses a global `pip3 install pyinstaller`.
+        #   * Windows — `choco install python3` did not refresh PATH; later
+        #     `python3 -m venv` failed silently and the .venv/bin/activate
+        #     source step crashed.
+        # `setup-python@v5` adds a runner-local Python install on PATH without
+        # a global pip, sidestepping both. PyInstaller + pdfplumber install
+        # inside the venv that ``build-sidecar.sh`` creates next.
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
 
       - name: Build PDF plumber sidecar
-        run: bash scripts/build-sidecar.sh
+        # Pass the matrix target so the PyInstaller binary name matches
+        # Tauri's externalBin lookup on every platform (the previous
+        # hard-coded ``pdfplumber-x86_64-unknown-linux-gnu`` filename only
+        # matched the Linux matrix entry, breaking Windows + macOS bundling
+        # downstream of tauri-action).
+        run: bash scripts/build-sidecar.sh ${{ matrix.target }}
         shell: bash
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Round-9 followup (signing-secret graceful fallback): when the
+          # signer keys are not yet provisioned in repo Secrets
+          # (``Settings -> Secrets and variables -> Actions``), GitHub
+          # resolves ``secrets.X`` to the empty string. tauri-action v0
+          # then skips the updater-manifest signing step instead of
+          # aborting the whole ``tauri build`` invocation, which is the
+          # behaviour we want for the rc publishes. Installer assets
+          # (.deb / .AppImage / .dmg / .msi) still build + upload; only
+          # the auto-generated signed ``latest.json`` for the in-app
+          # updater channel is omitted, which is fine for pre-release
+          # distribution (users install manually from the GitHub
+          # Release page anyway). Provision both secrets before v0.2.0
+          # GA so signed auto-updates work end-to-end.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'LENS v__VERSION__'

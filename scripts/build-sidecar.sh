@@ -80,7 +80,20 @@ echo "Copying binary to sidecars directory..."
 # one line). This is safe here because Tauri's externalBin only
 # ever globs the single binary Tauri's externalBin expects — a
 # stray non-existent cp source is harmless noise, not a build failure.
-cp "dist/pdfplumber-$TARGET"{,.exe} .. 2>/dev/null || true
+#
+# Round-8 fix (regression introduced in round-7's brace expansion):
+# copy into the CURRENT directory (`.`), NOT its parent (`..`).
+# ``externalBin: ["sidecars/pdfplumber/pdfplumber"]`` in
+# src-tauri/tauri.conf.json makes Tauri's bundler look for
+# ``src-tauri/sidecars/pdfplumber/pdfplumber-<TARGET>`` — i.e.,
+# INSIDE the sidecar directory itself, not one level up. Writing
+# to `..` previously placed the binary at
+# ``src-tauri/sidecars/pdfplumber-<TARGET>``, which the bundler
+# could not discover on Linux/macOS/Windows alike, so every
+# desktop matrix entry of release.yml silently failed at the
+# ``tauri build`` bundling step (~v0.2.0-rc.1 onward) and no
+# GitHub release draft was ever created.
+cp "dist/pdfplumber-$TARGET"{,.exe} . 2>/dev/null || true
 
 deactivate
 echo "Done."
