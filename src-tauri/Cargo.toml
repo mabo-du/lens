@@ -4,6 +4,11 @@ version = "0.1.1"
 description = "A Tauri App"
 authors = ["Mark Bouck"]
 edition = "2021"
+# Resolve charter AE-ENV-001 (Rust toolchain signal). Cargo's
+# canonical `rust-version` is consumed by `cargo install --locked`,
+# Dependabot, and crate registries; pair it with the project-root
+# `rust-toolchain.toml` which pins the BUILDER side.
+rust-version = "1.75"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

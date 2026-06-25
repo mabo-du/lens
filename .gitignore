@@ -66,3 +66,14 @@ base_library.zip
 # Environment and secrets
 .env*
 !.env.example
+
+# ---- Playwright + CI artifacts ----
+# Generated on every Playwright run via globalSetup/globalTeardown
+# (see tests/e2e/global-setup.mjs). Recreate locally with
+# `npx playwright test --config=tests/e2e/playwright.config.ts`.
+playwright-report/
+test-results/
+.lens-e2e/
+
+# Playwright MCP server ephemeral state (used outside CI during dev).
+.playwright-mcp/

@@ -22,6 +22,15 @@ export default defineConfig({
   use: {
     baseURL: 'http://127.0.0.1:57599',
     trace: 'on-first-retry',
+    // Container / sandboxed CI runners (LXC, Docker, snap chromium)
+    // require `--no-sandbox` because Chromium's default sandbox setup
+    // cannot create the SUID helper. Local dev still has full sandbox.
+    // Container / sandboxed CI runners (LXC, Docker, snap chromium)
+    // require `--no-sandbox` because Chromium's default sandbox setup
+    // cannot create the SUID helper. Local dev keeps the full sandbox.
+    launchOptions: process.env['CI']
+      ? { args: ['--no-sandbox'] }
+      : {},
   },
   projects: [
     {
