@@ -62,6 +62,10 @@ fn validate_bbox(
     Ok(())
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Tauri #[command] — flat arg list required by IPC binding, cannot take a struct"
+)]
 #[command]
 pub async fn image_selection_create(
     _app: AppHandle,

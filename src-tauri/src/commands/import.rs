@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use tauri::{command, AppHandle, State};
 use uuid::Uuid;
 
-use super::projects::{AppState, DbKey};
+use super::projects::AppState;
 use crate::import::{docx, image as image_import, normalise, pdf, txt};
 
 /// Extractor identifier written to the `document.extractor_id` column for
@@ -33,11 +33,11 @@ pub struct Document {
     pub title: String,
     pub original_path: Option<String>,
     pub file_format: String,
-    pub plain_text: Option<String>,
-    /// Content hash used for race-safe dedup via the
+    pub plain_text: Option<String>,    /// Content hash used for race-safe dedup via the
     /// UNIQUE(project_id, text_hash) index (migration 02):
     ///   - text documents (txt/docx/pdf): SHA-256 of normalised text.
     ///   - image documents (png/jpg/jpeg): SHA-256 of raw file bytes.
+    ///
     /// A future migration can rename this column to `content_hash`
     /// once the dual use stabilises across extractors.
     pub text_hash: String,
@@ -372,6 +372,7 @@ mod tests {
     use super::*;
     use crate::commands::projects::AppState;
     use crate::db;
+    use crate::DbKey;
     use std::io::Write;
     use std::path::PathBuf;
     use tempfile::tempdir;

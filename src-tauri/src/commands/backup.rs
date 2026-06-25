@@ -35,7 +35,7 @@
 //! can decrypt the `.lensbackup` directly, even after the passphrase is
 //! forgotten. Treat it as a long-lived secret.
 
-use aes_gcm::aead::{Aead, AeadCore, KeyInit, Payload};
+use aes_gcm::aead::{Aead, KeyInit, Payload};
 use aes_gcm::{Aes256Gcm, Key, Nonce};
 use argon2::{Algorithm, Argon2, Params, Version};
 use rand::RngCore;

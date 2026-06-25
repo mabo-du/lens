@@ -67,7 +67,7 @@ pub async fn qdpx_import_internal(
                     entries.filter_map(|e| e.ok()).find(|e| {
                         e.path()
                             .extension()
-                            .map_or(false, |ext| ext == "qdaproj")
+                            .is_some_and(|ext| ext == "qdaproj")
                     })
                 })
                 .map(|e| e.path());
@@ -384,7 +384,7 @@ pub async fn qdpx_import_undo_internal(
     let db_path: std::path::PathBuf = std::fs::read_dir(folder)
         .map_err(|e| format!("Failed to read project folder: {}", e))?
         .filter_map(|e| e.ok())
-        .find(|e| e.path().extension().map_or(false, |ext| ext == "qdaproj"))
+        .find(|e| e.path().extension().is_some_and(|ext| ext == "qdaproj"))
         .map(|e| e.path())
         .ok_or("No .qdaproj database file found in project folder")?;
 

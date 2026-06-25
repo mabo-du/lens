@@ -26,6 +26,10 @@ impl DbKey {
     /// rejected so callers don't silently produce an unreadable db
     /// (SQLCipher would accept `PRAGMA key=''` and write a ciphertext
     /// that can never be decrypted).
+    #[allow(
+        clippy::redundant_guards,
+        reason = "empty passphrase must NOT fall through to derive_passphrase_key"
+    )]
     pub fn from_passphrase(raw: Option<&str>) -> Result<Self, String> {
         match raw {
             None => Ok(DbKey(None)),

@@ -92,8 +92,7 @@ fn main() {
     // Re-run if the requirements file changes (so version bumps trigger
     // a recompile without manual `cargo clean`).
     println!(
-        "cargo:rerun-if-changed={}",
-        "src-tauri/sidecars/pdfplumber/requirements.txt"
+        "cargo:rerun-if-changed=src-tauri/sidecars/pdfplumber/requirements.txt"
     );
 
     tauri_build::build()

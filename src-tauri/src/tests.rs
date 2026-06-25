@@ -1258,7 +1258,7 @@ async fn qdpx_import_merge_mode_imports_documents_codes_and_annotations() {
 
     let (state, _temp_dir) = setup_test_state().await;
 
-    let project = projects_create_internal(
+    let _project = projects_create_internal(
         &state,
         "QDPX Merge Test".to_string(),
         None,
@@ -1608,7 +1608,7 @@ async fn qdpx_import_rejects_missing_project_qde() {
 
     let (state, _temp_dir) = setup_test_state().await;
 
-    let project = projects_create_internal(
+    let _project = projects_create_internal(
         &state,
         "QDPX Missing QDE Test".to_string(),
         None,
@@ -1653,7 +1653,7 @@ async fn qdpx_import_rejects_malformed_xml() {
 
     let (state, _temp_dir) = setup_test_state().await;
 
-    let project = projects_create_internal(
+    let _project = projects_create_internal(
         &state,
         "QDPX Bad XML Test".to_string(),
         None,
@@ -1698,7 +1698,7 @@ async fn qdpx_import_rejects_corrupted_zip() {
 
     let (state, _temp_dir) = setup_test_state().await;
 
-    let project = projects_create_internal(
+    let _project = projects_create_internal(
         &state,
         "QDPX Corrupt ZIP Test".to_string(),
         None,
