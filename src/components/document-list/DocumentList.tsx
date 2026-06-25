@@ -9,6 +9,8 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { runOcr } from './ocrClient';
 import { TESSERACT_JS_EXTRACTOR_ID } from './ocrWorker';
+import { extractPdfText, getPdfPageCount } from './pdfjsClient';
+import { runPdfOcr } from './pdfOcrClient';
 
 // TESSERACT_JS_EXTRACTOR_ID is derived at build time from the
 // `version` export of the `tesseract.js` package (see ocrWorker.ts),
@@ -108,6 +110,65 @@ export function DocumentList() {
     }
   };
 
+  /**
+   * Phase 1.5 PDF OCR handle — renders PDF pages to images via pdf.js,
+   * runs Tesseract.js OCR on each page, combines the text, and imports
+   * as `ocr_pdf` with the tesseract.js extractor ID.
+   */
+  const handlePdfOcrImport = async (pdfPath: string) => {
+    if (!activeProject) return;
+    const run = confirm(
+      'This PDF appears to have little or no embedded text.\n\n' +
+      'Run Tesseract.js OCR on each page? This may take a while for large PDFs. ' +
+      'The original PDF is preserved in assets/ ; only the recognised text is imported.',
+    );
+    if (!run) return;
+    setOcrPendingFile(pdfPath);
+    try {
+      let toastId: string | number | undefined;
+      const { text, pageCount, extractorId } = await runPdfOcr(pdfPath, (current, total) => {
+        if (toastId !== undefined) {
+          toast.info(`OCR page ${current} of ${total}...`, { id: toastId });
+        } else {
+          toastId = toast.info(`OCR page ${current} of ${total}...`);
+        }
+      });
+      if (toastId !== undefined) toast.dismiss(toastId);
+      toast.success(`OCR complete — ${pageCount} pages, ${text.length} chars`);
+      const doc = await documentsIpc.import({
+        projectId: activeProject.id,
+        filePath: pdfPath,
+        fileFormat: 'ocr_pdf',
+        rawText: text,
+        extractorIdOverride: extractorId,
+      } as Parameters<typeof documentsIpc.import>[0]);
+      addDocuments([doc]);
+      setActiveDocument(doc.id);
+    } catch (e) {
+      console.error(`PDF OCR failed for ${pdfPath}:`, e);
+      toast.error(`PDF OCR failed: ${e}`);
+    } finally {
+      setOcrPendingFile(null);
+    }
+  };
+
+  /**
+   * Phase 1 scanned-PDF detection: after pdfplumber returns text, check
+   * whether it's suspiciously short. If the PDF has more than 1 page and
+   * the extracted text is < 100 chars, surface the OCR dialog.
+   */
+  const checkScannedPdf = async (filePath: string, doc: DocumentRecord) => {
+    if (!doc.plainText || doc.plainText.length >= 100) return;
+    try {
+      const pageCount = await getPdfPageCount(filePath);
+      if (pageCount > 1) {
+        await handlePdfOcrImport(filePath);
+      }
+    } catch {
+      // page-count best-effort; don't block import on pdf.js failure
+    }
+  };
+
   const handleImport = async () => {
     if (!activeProject) return;
     const projectId = activeProject.id;
@@ -131,22 +192,44 @@ export function DocumentList() {
 
     for (const filePath of fileList) {
       const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
+      const supportedExts = ['txt', 'docx', 'pdf', 'png', 'jpg', 'jpeg'];
+      if (!supportedExts.includes(ext)) {
+        toast.error(`Unsupported file extension: ${ext}`);
+        continue;
+      }
       try {
-        // All formats (.txt, .docx, .pdf, .png, .jpg, .jpeg) delegate
-        // extraction to the Rust side via `documentsIpc.import`. The
-        // dispatcher (Rust) chooses the format-specific extractor:
-        // txt (file read), docx (zip + roxmltree), pdf (pdfplumber
-        // sidecar), or image (`image` crate header-only dimension reader).
-        const supportedExts = ['txt', 'docx', 'pdf', 'png', 'jpg', 'jpeg'];
-        if (supportedExts.includes(ext)) {
-          const doc = await documentsIpc.import({ projectId, filePath, fileFormat: ext });
-          newDocs.push(doc);
-        } else {
-          toast.error(`Unsupported file extension: ${ext}`);
+        const doc = await documentsIpc.import({ projectId, filePath, fileFormat: ext });
+        newDocs.push(doc);
+        // Phase 1.5: scanned-PDF detection for pdfplumber imports
+        if (ext === 'pdf') {
+          checkScannedPdf(filePath, doc);
         }
       } catch (e) {
-        console.error(`Failed to import ${filePath}:`, e);
-        toast.error(`Failed to import ${filePath}: ${e}`);
+        // Phase 1.5: pdf.js fallback — if the Rust pdfplumber sidecar
+        // fails (missing binary, encrypted PDF, etc.), extract text
+        // in the browser via pdf.js and retry via the `rawText` path.
+        if (ext === 'pdf') {
+          try {
+            toast.info('pdfplumber unavailable — falling back to pdf.js...');
+            const text = await extractPdfText(filePath);
+            toast.success(`pdf.js extracted ${text.length} chars`);
+            const doc = await documentsIpc.import({
+              projectId,
+              filePath,
+              fileFormat: 'pdf',
+              rawText: text,
+              extractorIdOverride: undefined,
+            } as Parameters<typeof documentsIpc.import>[0]);
+            newDocs.push(doc);
+            checkScannedPdf(filePath, doc);
+          } catch (fallbackErr) {
+            console.error(`pdf.js fallback also failed for ${filePath}:`, fallbackErr);
+            toast.error(`Failed to import PDF ${filePath}: both pdfplumber and pdf.js failed`);
+          }
+        } else {
+          console.error(`Failed to import ${filePath}:`, e);
+          toast.error(`Failed to import ${filePath}: ${e}`);
+        }
       }
     }
 

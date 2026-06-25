@@ -515,4 +515,136 @@ mod tests {
             dup_err
         );
     }
+
+    /// PDF integration test: exercises the `raw_text` path (which is what
+    /// DocumentList.tsx uses after the pdf.js fallback extracts text in the
+    /// browser). The `raw_text` parameter skips the pdfplumber sidecar call
+    /// (which requires an AppHandle), so this test runs without one.
+    ///
+    /// Verifies that text is normalised, hashed, word-counted, and inserted
+    /// with `file_format = 'pdf'` + extractor_id from the DOCX path (the
+    /// catch-all renderer-supplied arm). Duplicate detection is also tested.
+    #[tokio::test]
+    async fn documents_import_pdf_raw_text_path() {
+        let tmp = tempdir().expect("tempdir");
+        let db_path = tmp.path().join("test.qdaproj");
+        let pool = db::init_db(&db_path, None)
+            .await
+            .expect("init_db");
+
+        sqlx::query("INSERT INTO project (id, name, description) VALUES (?, ?, NULL)")
+            .bind("proj-test-pdf")
+            .bind("PDF Raw-Text Test")
+            .execute(&pool)
+            .await
+            .expect("insert project");
+        sqlx::query("INSERT INTO local_user (id, display_name) VALUES (?, ?)")
+            .bind("user-test")
+            .bind("Test User")
+            .execute(&pool)
+            .await
+            .expect("insert local_user");
+
+        let project_folder = tmp.path().to_path_buf();
+        std::fs::create_dir_all(project_folder.join("assets"))
+            .expect("create assets dir");
+
+        // Create a dummy PDF file (just a placeholder — the raw_text path
+        // doesn't actually read it; it only uses the file_name for the title
+        // and copies the file bytes to assets).
+        let pdf_path: PathBuf = tmp.path().join("research-interview.pdf");
+        std::fs::write(&pdf_path, b"%PDF-1.4 placeholder").expect("write dummy pdf");
+
+        let state = AppState {
+            db: RwLock::new(Some(pool)),
+            project_folder: RwLock::new(Some(project_folder.clone())),
+            encryption_key: RwLock::new(DbKey::default()),
+        };
+
+        // Simulate pdf.js extraction: renderer-supplied text via raw_text.
+        let raw = "   Hello  world.   \r\nThis is interview text.   ";
+        let doc = documents_import_internal(
+            None,
+            &state,
+            "proj-test-pdf".to_string(),
+            pdf_path.to_string_lossy().to_string(),
+            "pdf".to_string(),
+            Some(raw.to_string()),
+            None,
+        )
+        .await
+        .expect("pdf raw_text import");
+
+        // Metadata.
+        assert_eq!(doc.file_format, "pdf", "file_format must be pdf");
+        assert_eq!(doc.title, "research-interview.pdf");
+        // The catch-all (Some(text), _) arm currently stamps DOCX_EXTRACTOR_ID
+        // for any renderer-supplied text. A future refinement (v0.1.6) should
+        // split the arm so pdf gets a pdfjs-specific extractor_id.
+        assert!(
+            doc.extractor_id.contains("lens-docx"),
+            "raw_text path uses catch-all DOCX extractor (v0.1.6 refinement pending); got: {}",
+            doc.extractor_id
+        );
+
+        // Text must be normalised: CRLF -> LF, trimmed.
+        // NOTE: normalise_text does NOT collapse internal multi-spaces
+        // (that's a DOCX-only `collapse_whitespace` concern). The input
+        // has "  Hello  world." so after trim it becomes "Hello  world.".
+        let pt = doc.plain_text.clone().expect("plain_text");
+        assert!(!pt.contains('\r'), "normalised text must not contain CR");
+        assert!(
+            pt.starts_with("Hello"),
+            "leading spaces trimmed; got: {:?}",
+            pt
+        );
+        assert!(
+            pt.contains("This is interview text."),
+            "second sentence should survive; got: {:?}",
+            pt
+        );
+
+        // Word count: Hello/1 world/1 This/1 is/1 interview/1 text/1 = 6
+        // (compute_word_count splits on whitespace). Extra spaces between
+        // "Hello  world" don't add a word token; split_whitespace skips
+        // the gap entirely.
+        assert_eq!(
+            doc.word_count, 6,
+            "expected 6 words, got: {}",
+            doc.word_count
+        );
+
+        // text_hash must be deterministic.
+        let hash1 = doc.text_hash.clone();
+        let hash2 = normalise::compute_hash(&pt);
+        assert_eq!(hash1, hash2, "stored text_hash must match recalculated hash");
+
+        // Asset copy.
+        let asset_path = project_folder
+            .join("assets")
+            .join(format!("{}.pdf", doc.id));
+        assert!(
+            asset_path.exists(),
+            "asset file must be copied to {:?}",
+            asset_path
+        );
+
+        // Duplicate detection — re-import same text.
+        let dup_err = documents_import_internal(
+            None,
+            &state,
+            "proj-test-pdf".to_string(),
+            pdf_path.to_string_lossy().to_string(),
+            "pdf".to_string(),
+            Some(raw.to_string()),
+            None,
+        )
+        .await
+        .expect_err("re-import must surface duplicate error");
+        assert!(
+            dup_err.to_lowercase().contains("already been imported"),
+            "duplicate-detection message; got: {:?}",
+            dup_err
+        );
+    }
 }

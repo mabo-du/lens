@@ -9,6 +9,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import tesseractPkg from 'tesseract.js/package.json' with { type: 'json' };
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,6 +22,14 @@ export default defineConfig({
     },
   },
   plugins: [react()],
+  // Mirror main vite.config.ts: `__TESSERACT_JS_VERSION__` is statically
+  // substituted at build time with the version pinned in package.json.
+  // ocrWorker.ts and DocumentList.tsx both read it via a `declare global`
+  // block. Without this define, the fixture hits a ReferenceError and
+  // React never mounts (empty #root div).
+  define: {
+    __TESSERACT_JS_VERSION__: JSON.stringify(tesseractPkg.version),
+  },
   server: {
     host: '127.0.0.1',
     port: 57599,

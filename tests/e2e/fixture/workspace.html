@@ -4,6 +4,33 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>LENS E2E Workspace Fixture</title>
+    <!-- Pre-module Tauri stubs. Must run before any ESM import of
+         @tauri-apps/api/* or @tauri-apps/plugin-* because those
+         modules read window.__TAURI_* at evaluation time. The
+         fixture's main-workspace.tsx will replace these with
+         richer mocks after all modules have loaded. -->
+    <script>
+      // Clear persisted Zustand state so the fixture's explicit
+      // setState() calls are authoritative (the uiStore's persist
+      // middleware hydrates asynchronously, which can overwrite
+      // activeDocumentId after React mounts).
+      try { localStorage.removeItem('lens-ui-storage'); } catch (_) {}
+      // Tauri v2 reads __TAURI_IPC__ at module-evaluation time alongside
+      // __TAURI_INTERNALS__. Provide both before any ESM import evaluates.
+      window.__TAURI_IPC__ = window.__TAURI_IPC__ || {};
+      window.__TAURI_INTERNALS__ = {
+        invoke: async function() { return {}; },
+        transformCallback: async function() { return 0; },
+        convertFileSrc: function(p) { return p; },
+      };
+      window.__TAURI_PLUGIN_DIALOG__ = {
+        open: async () => null,
+        save: async () => null,
+      };
+      window.__TAURI_PLUGIN_FS__ = {
+        writeFile: async () => {},
+      };
+    </script>
   </head>
   <body>
     <div id="root" style="display: flex; height: 100vh; width: 100vw;"></div>

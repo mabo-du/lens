@@ -4,6 +4,21 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>LENS E2E Fixture</title>
+    <script>
+      window.__TAURI_IPC__ = window.__TAURI_IPC__ || {};
+      window.__TAURI_INTERNALS__ = {
+        invoke: async function() { return {}; },
+        transformCallback: async function() { return 0; },
+        convertFileSrc: function(p) { return p; },
+      };
+      window.__TAURI_PLUGIN_DIALOG__ = {
+        open: async () => null,
+        save: async () => null,
+      };
+      window.__TAURI_PLUGIN_FS__ = {
+        writeFile: async () => {},
+      };
+    </script>
   </head>
   <body>
     <div id="root" style="height: 100vh; width: 100vw;"></div>
