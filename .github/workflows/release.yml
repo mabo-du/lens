@@ -16,9 +16,16 @@ jobs:
           - platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             ext: ''
+            # Round-10: pin Linux bundle type to avoid hitting GitHub for
+            # WiX/.msi auto-downloads (Windows) or appimage SDK auto-fetch.
+            bundles: 'appimage,deb'
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
             ext: '.exe'
+            # Round-10: `nsis` only (EXE installer) avoids the WiX toolset
+            # auto-download that intermittently fails when the runner
+            # hits GitHub API rate limits while fetching WiX releases.
+            bundles: 'nsis'
           # Round-8 fix (PyInstaller is host-only): pin the runner to
           # match the target triple (macos-13 = Intel x86_64 host,
           # macos-14 = Apple Silicon host). Previously ``macos-latest''
@@ -29,9 +36,11 @@ jobs:
           - platform: macos-13
             target: x86_64-apple-darwin
             ext: ''
+            bundles: 'app,dmg'
           - platform: macos-14
             target: aarch64-apple-darwin
             ext: ''
+            bundles: 'app,dmg'
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -120,14 +129,16 @@ jobs:
           releaseBody: 'See the assets to download and install this version.'
           releaseDraft: true
           prerelease: false
-          args: --target ${{ matrix.target }}
+          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+          # Round-10: ``bundles`` is matrix-driven so the value ALWAYS
+          # matches the host triple; no cross-platform mismatch possible.
+          # Switching to a single-literal on the wrong host would still
+          # error (the legacy warning is preserved below for any future
+          # ad-hoc overrides via env).
           # NOTE: do NOT pass `--bundles <single-literal>` (e.g. `--bundles
-          # app`, `--bundles msi`) as part of this `with.args:` value.
-          # tauri-action forwards args verbatim to `tauri build`, and Tauri
-          # 2.x rejects invalid single-literal `--bundles` on the wrong host
-          # at parse time (same class of failure as the release-dry-run.sh
-          # fix). Limit bundle types per platform via scripts/release-dry-run.sh's
-          # case statement (or extend tauri-action input), never via this arg.
+          # app`, `--bundles msi`) as part of this `with.args:` value when
+          # invoking locally or in a one-off workflow -- only use the
+          # matrix-driven form above.
 
   publish-pypi:
     name: Publish lens-qda to PyPI (OIDC trusted publishing)
@@ -179,7 +190,12 @@ jobs:
           # missing sub-command defaults, or missing attributes on ``args``
           # surface immediately (argparse calls ``sys.exit`` on ``--help``).
           set -euo pipefail
-          python -m pip install --upgrade pip  # not --quiet: pip-upgrade failures are the #1 failure mode for this job
+          # Round-10 followup: `pip install --upgrade pip` was the #1
+          # transient-failure mode in publish-pypi across rc.1 + rc.2
+          # runs (PyPI mirror DNS timeout, GitHub-access-timeout, etc.).
+          # Wrap with `|| true` so a pip-self-upgrade net-blip doesn't
+          # kill the publish-pypi job; we still want to ship the wheel.
+          python -m pip install --upgrade pip || true
           python -u - <<'PY'
           import sys
           from lens_qda import __version__
