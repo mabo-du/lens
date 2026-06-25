@@ -11,13 +11,23 @@ echo "[pre-commit] running gates..."
 echo "[pre-commit] 1/4 TypeScript: npx tsc --noEmit"
 npx tsc --noEmit
 
-echo "[pre-commit] 2/4 Rust:    cargo test  (sqlcipher feature)"
+echo "[pre-commit] 2/5 Rust:    cargo clippy -D warnings (default features)"
+# Clippy BEFORE cargo test so a lint regression fails fast (no need
+# to run the full test wall-clock for an easy-to-detect signal). The
+# `-D warnings` flag matches the CI gate so local devs hit the same
+# wall a PR would. (Round-XX charter AE-CI-001 followup.)
+# Run clippy with `--features sqlcipher` to mirror the next step's
+# feature flag — otherwise #[cfg(feature = "sqlcipher")] code paths
+# never lint locally and pre-commit green ≠ CI green.
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --features sqlcipher -- -D warnings
+
+echo "[pre-commit] 3/5 Rust:    cargo test  (sqlcipher feature)"
 (cd src-tauri && cargo test --features sqlcipher)
 
-echo "[pre-commit] 3/4 charter doctor"
+echo "[pre-commit] 4/5 charter doctor"
 charter doctor  # blocks commit when score drops below 80
 
-echo "[pre-commit] 4/4 aislop scan (informational)"
+echo "[pre-commit] 5/5 aislop scan (informational)"
 aislop scan || echo "[pre-commit] aislop issues found (non-blocking)"
 
 echo "[pre-commit] OK"

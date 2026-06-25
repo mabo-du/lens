@@ -1,0 +1,84 @@
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options
+# LENS weekly security/version update policy.
+#
+# Schedule: every Monday (early-morning UTC) so review queues are predictable.
+# Limits: 10 open PRs per package-ecosystem, semi-colon group for monorepos.
+# ecosystem `npm` covers package.json + package-lock.json; `cargo` covers
+# src-tauri/Cargo.toml + Cargo.lock. Ignored majors stay tracked but won't
+# trigger automatic PRs (the manual major-bump workflow approves them).
+
+version: 2
+
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "security"
+    # Major-book PRs need human review + the QDPX round-trip (see
+    # `export/QdpxExporter.ts`). Don't auto-PR them; just track.
+    ignore:
+      - dependency-name: "@tauri-apps/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@xmldom/xmldom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "prosemirror-*"
+        update-types: ["version-update:semver-major"]
+    commit-message:
+      prefix: "deps(npm)"
+    # groups: bundles multiple Dependabot PRs into one per group.
+    # `applies-to: version-updates` + the group name is REQUIRED —
+    # without it, the rules silently no-op and ~30 individual PRs/week
+    # open instead of ~3 grouped. Round-XX reviewer catch.
+    groups:
+      tauri-stack:
+        applies-to: version-updates
+        patterns:
+          - "@tauri-apps/*"
+      prosemirror-stack:
+        applies-to: version-updates
+        patterns:
+          - "prosemirror-*"
+
+  - package-ecosystem: "cargo"
+    directories:
+      - "/src-tauri"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:30"
+      timezone: "UTC"
+    open-pull-requests-limit: 6
+    labels:
+      - "dependencies"
+      - "security"
+    # Cargo `edition` upgrade and `sqlx` major versions break migration
+    # file format. Manual approval required.
+    ignore:
+      - dependency-name: "sqlx"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "tauri"
+        update-types: ["version-update:semver-major"]
+    commit-message:
+      prefix: "deps(cargo)"
+    # groups: see npm block above for the `applies-to: version-updates`
+    # rationale.
+    groups:
+      tauri-stack:
+        applies-to: version-updates
+        patterns:
+          - "tauri"
+          - "tauri-*"
+      sqlx-stack:
+        applies-to: version-updates
+        patterns:
+          - "sqlx"
+          - "libsqlite3-sys"

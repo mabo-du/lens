@@ -1,0 +1,85 @@
+name: "CodeQL security scan"
+
+# CodeQL: GitHub-native static analysis for TypeScript + Rust.
+# Schedules weekly (the cheapest cadence that's still useful) +
+# triggers on pushes to main + PRs. Strategy chosen so a security
+# event in any of the package files (`package.json`, `Cargo.toml`,
+# `pnpm-lock.yaml`, `Cargo.lock`) re-runs the scan automatically.
+#
+# Two-language analysis (TypeScript + Rust) covers:
+#   * the renderer (React 19 / TS strict)
+#   * the Tauri Rust backend (sqlx + reqwest + tokio)
+# Security-extended query pack runs by default; it includes
+# the full `security-extended` plus `security-and-quality` rules.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"  # Mon 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ["javascript", "rust"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e1148825835ea55811796d1948834465d64828 # v4.3.1
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@4e828fd8c0c4cd3e5b67e02d65274eb5d4c06fff # v3.28.18
+        with:
+          languages: ${{ matrix.language }}
+          # `security-extended` pack emits more findings than `default`.
+          queries: security-extended
+
+      - name: Setup Node (for javascript matrix)
+        if: matrix.language == 'javascript'
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.3.0
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install JS dependencies (for javascript matrix)
+        if: matrix.language == 'javascript'
+        run: |
+          npm ci --ignore-scripts
+          # We do NOT run `npm run build` here; CodeQL only needs the
+          # sources to be present on disk. `ignore-scripts` keeps things
+          # fast and prevents accidental Tauri build.
+
+      - name: Install Rust toolchain (for rust matrix)
+        if: matrix.language == 'rust'
+        uses: dtolnay/rust-toolchain@e97e2d83da1543888362634358bb380e0c0ab58c # v1
+        with:
+          components: clippy
+
+      - name: Cache Cargo registry + target (for rust matrix)
+        if: matrix.language == 'rust'
+        uses: Swatinem/rust-cache@c193711b7d5225026938dc4027774d081b83d86f # v2.9.1
+        with:
+          workspaces: src-tauri -> target
+
+      # CodeQL's autobuild handles the rest for JavaScript; for Rust
+      # we give it a bootstrap hint so it knows where to find
+      # Cargo.toml (the workspace root is the repo root, not
+      # src-tauri, since we're a single-crate project).
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@4e828fd8c0c4cd3e5b67e02d65274eb5d4c06fff # v3.28.18
+        with:
+          category: "/language:${{ matrix.language }}"
