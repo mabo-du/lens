@@ -19,8 +19,8 @@ re-upload of the same wheel filename).
 
 ### Fixed (this GA cut)
 Three semantic groups (collapsed into pipeline reliability, workflow
-conformance, workflow documentation; full commit-by-commit provenance
-is in `git log`).
+matrix conformance, workflow documentation; full commit-by-commit
+provenance is in `git log`).
 - **Pipeline reliability** - `scripts/build-sidecar.sh` now writes the
   PyInstaller binary to the path `externalBin` expects
   (commit `da37066`); macOS matrix split so `macos-13` builds the
@@ -32,7 +32,7 @@ is in `git log`).
   updater-manifest step instead of aborting the build (commit `2e9dad4`);
   `pip install --upgrade pip || true` in publish-pypi's smoke test
   (commit `ed81662`).
-- **Workflow conformance** - per-host `bundles:` matrix field pin
+- **Workflow matrix conformance** - per-host `bundles:` matrix field pin
   (`nsis` only on Windows to skip the intermittent WiX auto-download,
   `appimage,deb` on Linux, `app,dmg` on macOS) forwarded to
   tauri-action's `args:` via `--bundles ${{ matrix.bundles }}`
@@ -212,23 +212,23 @@ Dependable image-doc UX: Konva-powered image viewer with drag-to-create bbox reg
 
 ### Added
 - **Image-viewer + region drawing** — new `ImageViewer.tsx` mounts in `DocumentEditor` when `document.file_format` is `png`/`jpg`/`jpeg`. Renders the bitmap at its intrinsic width/height via react-konva, lets the researcher pick a code from the project tree, and drag-draws a bounding-box Rect on mouseup. Coordinates normalised to 0..1 at the IPC boundary so REFI-QDA AreaReference export can use them verbatim.
-- **Migration 05 — `plain_text` nullable** — 12-step `CREATE TABLE _new` schema rebuild relaxes the NOT NULL constraint on `document.plain_text`. The prior round-70 attempt at `ALTER COLUMN ... DROP NOT NULL` broke 34/53 integration tests on the bundled SQLite ("unsupported ALTER TABLE" path); this rebuild is portable across every reasonable SQLite ≥ 3.7 since it relies only on native CREATE / INSERT / DROP / ALTER RENAME. FTS5 sync triggers recreated with `COALESCE(plain_text, '')` so image rows with NULL don't break full-text search.
+- **Migration 05 — `plain_text` nullable** — 12-step `CREATE TABLE _new` schema rebuild relaxes the NOT NULL constraint on `document.plain_text`. The prior commit-history (`git log`) attempt at `ALTER COLUMN ... DROP NOT NULL` broke 34/53 integration tests on the bundled SQLite ("unsupported ALTER TABLE" path); this rebuild is portable across every reasonable SQLite ≥ 3.7 since it relies only on native CREATE / INSERT / DROP / ALTER RENAME. FTS5 sync triggers recreated with `COALESCE(plain_text, '')` so image rows with NULL don't break full-text search.
 - **Image-region IPC** — three new Tauri commands: `image_selection_create` (with bbox coord validation: rejects NaN/Infinity, out-of-range, zero-area, non-strict rectangles), `image_selection_list_by_document`, `image_selection_delete`. All wrapped in transactions; the `selection` parent row + `image_selection` extension row are inserted atomically.
 - **Document-asset IPC** — `document_get_asset_base64` reads the bitmap from `assets/<id>.<ext>` on disk and returns a base64-encoded payload + MIME type so the renderer can construct a `data:image/png;base64,...` URL. Rejects non-png/jpg/jpeg formats at the dispatcher.
 - **Frontend stack addition** — adds `konva` (10.x) + `react-konva` (19.x) to package.json.
 
 ### Changed
-- **Image-import dispatcher** — `commands/import.rs` image branch now binds `plain_text: None` directly (vs the round-70 fallback to `Some("")`); combined with migration 05, this is the canonical post-cut path.
+- **Image-import dispatcher** — `commands/import.rs` image branch now binds `plain_text: None` directly (vs the commit-history (`git log`) fallback to `Some("")`); combined with migration 05, this is the canonical post-cut path.
 
 ### Tests
 - `image_selection_bbox_round_trip` — assert insert → SELECT (JOIN) → delete via FK cascade.
-- `migration_05_relaxes_plain_text` — assert a row can be inserted with NULL `plain_text` and the value round-trips (closes the round-70 regression violation that originally broke 34 of 53 tests).
+- `migration_05_relaxes_plain_text` — assert a row can be inserted with NULL `plain_text` and the value round-trips (closes the commit-history (`git log`) regression violation that originally broke 34 of 53 tests).
 
 ## [0.2.0-rc.1] - 2026-06-26
 
-### v0.2 — Playwright E2E wiring + http-server stack + CI integration (round-78)
+### v0.2 — Playwright E2E wiring + http-server stack + CI integration (commit-history (`git log`))
 
-Builds on the round-77 test infrastructure with two corrections and one
+Builds on the commit-history (`git log`) test infrastructure with two corrections and one
 production CI integration:
 
 #### http-server replaces `vite preview` (and the failing `vite dev`)
@@ -287,7 +287,7 @@ config bug — CI provides a fresh env where the http-server backing
    resolves `localhost` to `::1` while servers bind IPv4. Forcing
    `127.0.0.1` everywhere is the first mitigation.
 4. Try a different transport: `vite dev` → `vite build && vite preview`
-   → static build + `npx http-server` (round-78 final choice because
+   → static build + `npx http-server` (commit-history (`git log`) final choice because
    it's a 100-line responder with no rolling dev-tooling).
 5. If all three still fail, the runner has browser network hardening
    that breaks localhost TCP; the gate belongs in CI where the runner
@@ -305,7 +305,7 @@ config bug — CI provides a fresh env where the http-server backing
 
 ### v0.2 — polygon-mode UX (frontend, this commit)
 
-Building on the round-74 v0.2 polygon backend foundation (migration 06 +
+Building on the commit-history (`git log`) v0.2 polygon backend foundation (migration 06 +
 `image_polygon` extension table + 3 IPC handlers + round-trip test + TS
 IPC), the Konva image viewer now ships an interactive **polygon-mode
 drawing tool** alongside the existing bbox mode.
@@ -353,7 +353,7 @@ handles both.
 
 ### v0.2 — memos-on-region + polygon-mode test coverage (this commit)
 
-Building on the round-75 polygon-mode UX, this commit adds the memo-on-
+Building on the commit-history (`git log`) polygon-mode UX, this commit adds the memo-on-
 region binding (cross-document annotation memos exposed for image regions
 and polygons) plus the first vitest coverage for the polygon interaction
 state machine, so future edits to vertex / snap / commit behaviour are
@@ -407,7 +407,7 @@ Pure helpers exported:
 | `modeSwitchReset()` | `()` | `{ draftRect: null, draftVertices: [], cursorPos: null }` |
 
 `ImageViewer.tsx` now imports these and the inline math is reduced to
-state plumbing + Konva rendering. Behaviour is unchanged: the round-75
+state plumbing + Konva rendering. Behaviour is unchanged: the commit-history (`git log`)
 gate suite (tsc 0 / cargo 0 / vitest 0 / vite build 0) is re-greened
 with the new tests included.
 
@@ -418,7 +418,7 @@ Snap-distance boundary cases covered by the tests:
 - MAX_POLYGON_VERTICES = 64 boundary (64 → commit, 65 → reject)
 - MIN_POLYGON_VERTICES = 3 boundary (2 → reject, 3 → commit)
 
-### v0.2 — Playwright E2E + Konva perf baseline (round-77, this commit)
+### v0.2 — Playwright E2E + Konva perf baseline (commit-history (`git log`), this commit)
 
 Two infrastructure tracks to close the [Unreleased] v0.2 items:
 a real-browser E2E suite and a Konva draw-time baseline.
@@ -490,7 +490,7 @@ third-party-action blocklist on `Settings → Actions → General → Allow
 specified actions`. Steps are written to `.gh_admin_org_setup.md` in
 the repository root.
 
-### v0.2 — Collaboration lock file + lock status indicator (round-79, this commit)
+### v0.2 — Collaboration lock file + lock status indicator (commit-history (`git log`), this commit)
 
 Implements the baton-pass collaboration lock from Plan §7.2, preventing
 simultaneous project access across devices.
@@ -528,7 +528,7 @@ on rewrite.
 
 ### Planned for v0.2 (remaining)
 - Apple-signing release.yml matrix verification + GA cut
-- Custom-canvas comparison vs the round-77 Konva baseline (v0.3 track)
+- Custom-canvas comparison vs the commit-history (`git log`) Konva baseline (v0.3 track)
 
 ## [Unreleased]
 
