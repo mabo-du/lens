@@ -46,6 +46,22 @@ dist-ssr
 /target/
 /src-tauri/target/
 
+# Root Cargo.lock (no root Cargo.toml — Tauri Cargo.toml is in src-tauri/)
+Cargo.lock
+
+# Temporary commit message drafts
+.commitmsg*
+.commit_*.txt
+
+# GitHub admin notes (one-off setup docs)
+.gh_admin_org_setup.md
+
+# Charter analysis artefacts
+charter-report.json
+
+# One-off utility scripts
+navigate.cjs
+
 # PyInstaller + sidecar build artefacts
 # (the canonical Linux-side pdfplumber bundle is built per-platform
 #  by scripts/build-sidecar.sh, not committed)

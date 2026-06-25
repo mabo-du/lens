@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use std::path::{Component, Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{command, AppHandle, State};
 use tokio::sync::RwLock;
 use uuid::Uuid;
@@ -127,6 +128,74 @@ pub struct Project {
     pub created_at: String,
     #[sqlx(rename = "updatedAt")]
     pub updated_at: String,
+}
+
+/// ── Collaboration lock file (baton-pass, Plan §7.2) ──
+///
+/// On project open, a `project.lock` file is written to the project
+/// folder containing the local user's display name and an ISO-8601
+/// timestamp. On project close (or app quit), it's removed.
+///
+/// Stale locks (older than 8 hours) are silently cleared — the
+/// assumption is a crash or forced quit left the file behind.
+const LOCK_FILE_NAME: &str = "project.lock";
+const STALE_LOCK_HOURS: u64 = 8;
+
+fn lock_file_path(project_dir: &Path) -> PathBuf {
+    project_dir.join(LOCK_FILE_NAME)
+}
+
+fn write_lock_file(project_dir: &Path, user_name: &str) {
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let name = if user_name.is_empty() { "Unknown User" } else { user_name };
+    let content = format!("user={}\ntimestamp={}\n", name, ts);
+    if let Err(e) = std::fs::write(lock_file_path(project_dir), &content) {
+        log::warn!(target: "lens::projects", "failed to write lock file: {e}");
+    }
+}
+
+fn read_lock_file(project_dir: &Path) -> Option<(String, u64)> {
+    let content = std::fs::read_to_string(lock_file_path(project_dir)).ok()?;
+    let mut user = String::new();
+    let mut ts: u64 = 0;
+    for line in content.lines() {
+        if let Some(v) = line.strip_prefix("user=") {
+            user = v.to_string();
+        } else if let Some(v) = line.strip_prefix("timestamp=") {
+            ts = v.parse().unwrap_or(0);
+        }
+    }
+    if user.is_empty() { None } else { Some((user, ts)) }
+}
+
+pub(crate) fn remove_lock_file(project_dir: &Path) {
+    let _ = std::fs::remove_file(lock_file_path(project_dir));
+}
+
+/// Check whether a project appears to be open elsewhere (lock file exists
+/// and is not stale). Returns `Some(warning_message)` if a fresh lock
+/// is found, `None` if the project is free or the lock is stale.
+fn check_project_lock(project_dir: &Path) -> Option<String> {
+    let (user, ts) = read_lock_file(project_dir)?;
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let age_secs = now.saturating_sub(ts);
+    let stale = age_secs > (STALE_LOCK_HOURS * 3600);
+    if stale {
+        remove_lock_file(project_dir);
+        return None;
+    }
+    Some(format!(
+        "This project appears to be open by '{}' on another device. \
+         Continuing may cause data conflicts. If you are certain \
+         the other instance has been closed, you can proceed safely.",
+        user
+    ))
 }
 
 /// Auto-create a `local_user` row if the table is empty. This guarantees
@@ -421,11 +490,21 @@ pub async fn projects_open(
     .await
     .map_err(|e| format!("Failed to read project metadata: {}", e))?;
 
-    *state.db.write().await = Some(pool);
     let folder = db_path
         .parent()
         .ok_or("Invalid project path (cannot determine parent directory)")?
         .to_path_buf();
+
+    // Write collaboration lock file (baton-pass, Plan §7.2).
+    // Query user name before moving pool into state.
+    let user_name: String =
+        sqlx::query_scalar("SELECT display_name FROM local_user LIMIT 1")
+            .fetch_one(&pool)
+            .await
+            .unwrap_or_else(|_| "Unknown User".to_string());
+    write_lock_file(&folder, &user_name);
+
+    *state.db.write().await = Some(pool);
     *state.project_folder.write().await = Some(folder);
 
     Ok(project)
@@ -436,6 +515,15 @@ pub async fn projects_open(
 pub async fn projects_is_encrypted(project_dir: String) -> Result<bool, String> {
     let flag_path = PathBuf::from(&project_dir).join(".encrypted");
     Ok(flag_path.exists())
+}
+
+/// Check whether a project folder has a live collaboration lock file.
+/// Returns `Some(warning_message)` if the lock is fresh, `None` if the
+/// project is free to open. Callers should surface the warning before
+/// calling `projects_open`.
+#[command]
+pub async fn projects_check_lock(project_dir: String) -> Result<Option<String>, String> {
+    Ok(check_project_lock(&PathBuf::from(&project_dir)))
 }
 
 #[command]
@@ -518,6 +606,10 @@ pub async fn projects_close(state: State<'_, AppState>) -> Result<(), String> {
         if let Err(e) = crate::db::autosave_checkpoint(pool).await {
             log::warn!(target: "lens::db", "close-time checkpoint failed: {e}");
         }
+    }
+    // Remove collaboration lock file before releasing state.
+    if let Some(ref folder) = *state.project_folder.read().await {
+        remove_lock_file(folder);
     }
     *state.db.write().await = None;
     *state.project_folder.write().await = None;
@@ -677,5 +769,167 @@ mod dbkey_tests {
         let k = DbKey::default();
         assert!(!k.is_some());
         assert_eq!(k.as_deref(), None);
+    }
+}
+
+#[cfg(test)]
+mod lock_file_tests {
+    //! Collaboration lock file (baton-pass, Plan §7.2) integration tests.
+    //! Exercises the full lifecycle: write → read → stale detection → remove.
+
+    use super::*;
+    use std::fs;
+    use std::thread;
+    use std::time::Duration;
+
+    /// Helper: create an empty temp directory that gets cleaned up on drop.
+    struct TempDir {
+        path: PathBuf,
+    }
+
+    impl TempDir {
+        fn new() -> Self {
+            let path = std::env::temp_dir().join(format!("lens-lock-test-{}", Uuid::new_v4()));
+            fs::create_dir_all(&path).expect("create temp dir");
+            TempDir { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
+    #[test]
+    fn write_and_read_lock_file_round_trip() {
+        let dir = TempDir::new();
+        write_lock_file(dir.path(), "Alice");
+
+        let lock_path = lock_file_path(dir.path());
+        assert!(lock_path.exists(), "lock file should exist after write");
+
+        let (user, ts) = read_lock_file(dir.path()).expect("read back");
+        assert_eq!(user, "Alice");
+        assert!(ts > 0, "timestamp should be a positive Unix epoch");
+
+        // Content should have expected format
+        let content = fs::read_to_string(&lock_path).unwrap();
+        assert!(content.starts_with("user=Alice\n"));
+        assert!(content.contains("timestamp="));
+    }
+
+    #[test]
+    fn read_lock_file_returns_none_when_missing() {
+        let dir = TempDir::new();
+        assert!(read_lock_file(dir.path()).is_none());
+    }
+
+    #[test]
+    fn read_lock_file_returns_none_for_empty_user() {
+        let dir = TempDir::new();
+        fs::write(
+            lock_file_path(dir.path()),
+            "user=\ntimestamp=1000000\n",
+        )
+        .unwrap();
+        assert!(read_lock_file(dir.path()).is_none(), "empty user → None");
+    }
+
+    #[test]
+    fn write_lock_file_falls_back_to_unknown_user_for_empty_name() {
+        let dir = TempDir::new();
+        write_lock_file(dir.path(), "");
+        let (user, _) = read_lock_file(dir.path()).expect("read back");
+        assert_eq!(user, "Unknown User");
+    }
+
+    #[test]
+    fn write_lock_file_handles_unicode_names() {
+        let dir = TempDir::new();
+        write_lock_file(dir.path(), "José Møller");
+        let (user, _) = read_lock_file(dir.path()).expect("read back");
+        assert_eq!(user, "José Møller");
+    }
+
+    #[test]
+    fn remove_lock_file_cleans_up() {
+        let dir = TempDir::new();
+        write_lock_file(dir.path(), "Bob");
+        assert!(lock_file_path(dir.path()).exists());
+
+        remove_lock_file(dir.path());
+        assert!(!lock_file_path(dir.path()).exists());
+        assert!(read_lock_file(dir.path()).is_none());
+    }
+
+    #[test]
+    fn check_project_lock_fresh_returns_warning() {
+        let dir = TempDir::new();
+        write_lock_file(dir.path(), "Charlie");
+
+        let warning = check_project_lock(dir.path());
+        assert!(warning.is_some(), "fresh lock should warn");
+        let msg = warning.unwrap();
+        assert!(msg.contains("Charlie"));
+        assert!(msg.contains("open by"));
+    }
+
+    #[test]
+    fn check_project_lock_none_for_no_lock_file() {
+        let dir = TempDir::new();
+        assert!(check_project_lock(dir.path()).is_none());
+    }
+
+    #[test]
+    fn check_project_lock_clears_stale_lock() {
+        let dir = TempDir::new();
+        // Write a lock with a timestamp from 9 hours ago (beyond STALE_LOCK_HOURS=8)
+        let stale_ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            .saturating_sub((STALE_LOCK_HOURS + 1) * 3600);
+        fs::write(
+            lock_file_path(dir.path()),
+            format!("user=OldUser\ntimestamp={}\n", stale_ts),
+        )
+        .unwrap();
+
+        // Should return None (lock was stale and got removed)
+        let warning = check_project_lock(dir.path());
+        assert!(warning.is_none(), "stale lock should be cleared silently");
+
+        // Lock file should be gone
+        assert!(
+            !lock_file_path(dir.path()).exists(),
+            "stale lock file should be deleted"
+        );
+    }
+
+    #[test]
+    fn lock_file_content_preserves_timestamp_integrity() {
+        let dir = TempDir::new();
+        write_lock_file(dir.path(), "Diana");
+
+        // Small delay to ensure timestamp difference
+        thread::sleep(Duration::from_millis(10));
+
+        let (_, ts1) = read_lock_file(dir.path()).unwrap();
+
+        // Rewrite with same user should produce a different timestamp
+        thread::sleep(Duration::from_millis(1100)); // 1.1s to guarantee different second
+        write_lock_file(dir.path(), "Diana");
+        let (user2, ts2) = read_lock_file(dir.path()).unwrap();
+
+        assert_eq!(user2, "Diana");
+        assert!(
+            ts2 > ts1,
+            "rewrite should produce a newer timestamp (ts1={ts1}, ts2={ts2})"
+        );
     }
 }

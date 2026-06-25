@@ -2,6 +2,12 @@
 
 Open-source qualitative data analysis (QDA) for the desktop. Import documents, build a hierarchical code tree, annotate text passages, and export to REFI-QDA standards — all offline-first, with no cloud dependency.
 
+## Documentation
+
+- **[User Guide](USER_GUIDE.md)** — End-user manual covering installation, coding workflow, export, and troubleshooting
+- **[Architecture](ARCHITECTURE.md)** — System design, data model, and IPC contract
+- **[Changelog](CHANGELOG.md)** — Version history (Keep a Changelog format)
+
 ## Features
 
 - **Document import:** TXT, DOCX (custom importer via xmldom + jszip), PDF (via pdfplumber sidecar)
