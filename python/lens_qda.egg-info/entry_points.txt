@@ -1,0 +1,2 @@
+[console_scripts]
+lens-qda = lens_qda.cli:main

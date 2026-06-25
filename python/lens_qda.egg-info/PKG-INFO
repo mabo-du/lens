@@ -1,0 +1,28 @@
+Metadata-Version: 2.4
+Name: lens-qda
+Version: 0.0.0
+Summary: Python utilities for LENS, a local-first qualitative data analysis (QDA) tool.
+Author: LENS contributors
+License-Expression: MIT
+Project-URL: Homepage, https://github.com/mabo-du/lens
+Project-URL: Source, https://github.com/mabo-du/lens/tree/main/python
+Project-URL: Issues, https://github.com/mabo-du/lens/issues
+Project-URL: Changelog, https://github.com/mabo-du/lens/blob/main/CHANGELOG.md
+Keywords: qda,qualitative,research,pdf,text-mining
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Science/Research
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Scientific/Engineering :: Information Analysis
+Classifier: Topic :: Text Processing :: Markup
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: pdfplumber==0.11.4
+Dynamic: license-file
+
+README.md

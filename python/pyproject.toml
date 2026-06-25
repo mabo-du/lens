@@ -1,0 +1,61 @@
+[build-system]
+# setuptools>=69 so both the SPDX-string `license` field and the PEP 639
+# `[project] license-files = [...]` declaration are accepted by the build
+# validator.
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lens-qda"
+version = "0.0.0"  # dynamically rewritten in .github/workflows/release.yml from $GITHUB_REF_NAME
+description = "Python utilities for LENS, a local-first qualitative data analysis (QDA) tool."
+readme = { text = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.8"
+# SPDX identifier form: universally supported by setuptools' validator across
+# versions that recognise PEP 639. Table form ``license = {file = "LICENSE"}``
+# requires a slightly newer validator and would make this package uninstallable
+# on older toolchains. The full text lives in ``python/LICENSE`` (mirror of the
+# project-root ``/LICENSE``; see the sync note in that file) and is listed
+# below via ``license-files`` so PyPI serves the full MIT body alongside the
+# SPDX badge.
+license = "MIT"
+license-files = ["LICENSE"]
+
+keywords = ["qda", "qualitative", "research", "pdf", "text-mining"]
+authors = [{ name = "LENS contributors" }]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    # No ``License :: ...`` classifier: PEP 639 forbids it when ``license``
+    # is an SPDX expression (which it is — see above).
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Text Processing :: Markup",
+]
+dependencies = [
+    # Mirrors the canonical pdfplumber pin in
+    # src-tauri/sidecars/pdfplumber/requirements.txt (read by build.rs via the
+    # PDFPLUMBER_VERSION env var and by scripts/build-sidecar.sh). Bump BOTH
+    # consumers in lockstep so the bundled Tauri sidecar and this PyPI package
+    # always speak the same pdfplumber dialect.
+    "pdfplumber==0.11.4",
+]
+
+[project.urls]
+"Homepage"   = "https://github.com/mabo-du/lens"
+"Source"     = "https://github.com/mabo-du/lens/tree/main/python"
+"Issues"     = "https://github.com/mabo-du/lens/issues"
+"Changelog"  = "https://github.com/mabo-du/lens/blob/main/CHANGELOG.md"
+
+[project.scripts]
+lens-qda = "lens_qda.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["lens_qda*"]
+exclude = ["tests*"]

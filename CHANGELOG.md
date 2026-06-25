@@ -5,6 +5,70 @@ All notable changes to LENS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0-rc.2] - 2026-06-26
+
+Re-tags the v0.2.0-rc.1 release with one additive feature: the
+release pipeline now publishes a pip-installable Python companion
+package to PyPI alongside the Tauri desktop matrix.
+
+This is the first release that uses **PyPI trusted publishing** via
+GitHub Actions OIDC — no PyPI API token is stored as a repository
+secret.
+
+### Added
+- **`lens-qda` Python package on PyPI** — a small CLI companion that
+  bundles the same PDF text-extraction pipeline the LENS desktop app
+  uses internally, exposed as a console-script entry point. Install
+  from PyPI:
+
+  ```bash
+  pip install lens-qda
+  ```
+
+  CLI surface (`lens-qda --help`):
+
+  ```
+  lens-qda extract <pdf> [--json] [--x-tolerance N] [--y-tolerance N]
+                            [-o OUTPUT]
+  lens-qda version    [-o OUTPUT]
+  ```
+
+  The `--json` flag emits the same `{"success": bool, "text"|"error": str}`
+  envelope the Tauri Rust layer parses from the bundled PDF sidecar, so
+  CLI users and the desktop importer share one extraction contract.
+  `pdfplumber` is pinned to `==0.11.4` to match
+  `src-tauri/sidecars/pdfplumber/requirements.txt`.
+
+- **`publish-pypi` job in `.github/workflows/release.yml`** — runs on
+  every `v*` tag push (not on `workflow_dispatch` or branch pushes),
+  builds a sdist + pure-Python wheel from `python/`, and uploads via
+  `pypa/gh-action-pypi-publish`. The job uses OIDC (`id-token: write`)
+  for PyPI trusted publishing; the workstation-side configuration
+  binds it to `mabo-du/lens` + workflow `release.yml` + Environment
+  `(Any)`.
+
+- **Pure-Python wheel (`py3-none-any`)** — `len`, `python3 -m build`
+  produces both `lens_qda-<version>.tar.gz` (sdist) and
+  `lens_qda-<version>-py3-none-any.whl` (wheel). Users pick up
+  prebuilt `pdfplumber`, `cryptography`, and `pillow` wheels from
+  PyPI on install; no compiler is needed.
+
+### Changed
+- **`package.json`** — version bumped `0.2.0-rc.1` → `0.2.0-rc.2` so the
+  npm/Tauri side, the PyPI side, and the git tag stay aligned.
+
+### No-op relative to rc.1
+- Source code, Rust crate, SQLite migrations, Playwright E2E suite,
+  Konva perf baseline, Apple-signing onboarding doc, collaborator
+  lock-file, region-memo UX, polygon drawing test coverage — all
+  unchanged from rc.1. The privacy cleanup (`.ctx/` / `.gitnexus/` /
+  `.agents/` / `.beads/` / `.githooks/` / `.aidevops.json` /
+  `AGENTS.md` / `CLAUDE.md` / `TODO.md` / `ACTION_PLAN.md` /
+  `LENS_Action_Plan.md` / `charter.yaml` / `lefthook.yml` /
+  `.claude/settings.json` / `ci-artifacts/` / `test-results/` /
+  `todo/` removed from public history; `.claude/skills/` preserved
+  as peer-published tooling) applies identically here.
+
 ## [0.1.0-rc.1] - 2026-06-24
 
 First release candidate. Public-domain-format imports (txt / docx / pdf), structured

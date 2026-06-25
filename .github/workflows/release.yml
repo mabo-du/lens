@@ -98,3 +98,110 @@ jobs:
           # at parse time (same class of failure as the release-dry-run.sh
           # fix). Limit bundle types per platform via scripts/release-dry-run.sh's
           # case statement (or extend tauri-action input), never via this arg.
+
+  publish-pypi:
+    name: Publish lens-qda to PyPI (OIDC trusted publishing)
+    runs-on: ubuntu-22.04
+    # PyPI trusted-publishing is configured for:
+    #   project:       lens-qda
+    #   publisher:     GitHub
+    #   repository:    mabo-du/lens
+    #   workflow:      release.yml
+    #   environment:   (Any)
+    # No PyPI API token required — the workflow's OIDC token is exchanged for
+    # short-lived upload credentials by PyPI on its side.
+    permissions:
+      id-token: write   # required for OIDC issuance
+      contents: read    # checkout only
+    # Run on real tag pushes only — ``github.ref_type == 'tag'`` + ``v`` prefix
+    # guards against pathological ref names like ``vv0.1.0``. The Tauri build
+    # job runs in parallel and its outcome does not gate the Python packaging,
+    # so users can ``pip install lens-qda`` even if a single platform in the
+    # desktop matrix is still being assembled.
+    if: github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.0
+
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
+
+      - name: Derive version from tag (${{ github.ref_name }})
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Publishing lens-qda==${VERSION} from tag ${GITHUB_REF_NAME}"
+          sed -i "s/^version = \"0\.0\.0\"/version = \"${VERSION}\"/" python/pyproject.toml
+          sed -i "s/__version__ = \"0\.0\.0\"/__version__ = \"${VERSION}\"/" python/lens_qda/__init__.py
+          echo "--- patched pyproject.toml version line ---"
+          grep '^version' python/pyproject.toml
+          echo "--- patched __init__.py version line ---"
+          grep '__version__' python/lens_qda/__init__.py
+
+      - name: Smoke-test the package before uploading
+        working-directory: python
+        run: |
+          # Catches ImportError / syntax slips *before* PyPI accepts an artefact
+          # that would fail on the first ``pip install lens-qda``.
+          #
+          # The ``main(['--help'])`` and ``main(['extract', '--help'])`` calls
+          # exercise argparse to the point where bad ``add_argument`` keywords,
+          # missing sub-command defaults, or missing attributes on ``args``
+          # surface immediately (argparse calls ``sys.exit`` on ``--help``).
+          set -euo pipefail
+          python -m pip install --upgrade pip  # not --quiet: pip-upgrade failures are the #1 failure mode for this job
+          python -u - <<'PY'
+          import sys
+          from lens_qda import __version__
+          from lens_qda.cli import build_parser, main
+
+          # 1) Static import + parser construction
+          build_parser()
+
+          # 2) Top-level --help round-trip (argparse exits 0)
+          try:
+              main(["--help"])
+          except SystemExit as e:
+              assert e.code in (0, None), f"top-level --help exit code = {e.code}"
+
+          # 3) Sub-command --help round-trip (argparse exits 0)
+          try:
+              main(["extract", "--help"])
+          except SystemExit as e:
+              assert e.code in (0, None), f"extract --help exit code = {e.code}"
+
+          print(f"lens-qda {__version__}: imports + both --help paths OK")
+          PY
+
+      # PEP 440 normalisation note: tag ``v0.2.0-rc.2`` strips to literal
+      # ``0.2.0-rc.2`` in pyproject.toml (visible after the sed grep above),
+      # but setuptools normalises that to ``0.2.0rc2`` when naming the wheel
+      # (``lens_qda-0.2.0rc2-py3-none-any.whl``). Both representations refer
+      # to the same release on PyPI; the wheel filename is the canonical
+      # distribution artefact name.
+      - name: Build sdist + py3-none-any wheel
+        working-directory: python
+        run: |
+          set -euo pipefail
+          # Pin the toolchain with bounded ranges so a future twine / build /
+          # wheel release with behaviour changes can't silently break the
+          # publish gate, but a CDN purge or yanked exact-version won't brick
+          # the install.
+          python -m pip install --quiet --upgrade 'build>=1.2,<2' 'twine>=5.1,<6' 'wheel>=0.43,<1'
+          python -m build
+          echo "--- dist artefacts ---"
+          ls -la dist
+
+      - name: Validate package metadata (twine check)
+        working-directory: python
+        run: |
+          # Catches broken project URLs, classifier typos, README
+          # long-description failures, and malformed PKG-INFO before we hand
+          # the artefacts to PyPI's upload validator.
+          set -euo pipefail
+          python -m twine check dist/*
+
+      - name: Publish to PyPI (OIDC trusted-publishing)
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
+        with:
+          packages-dir: python/dist
