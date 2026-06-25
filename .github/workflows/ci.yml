@@ -66,6 +66,8 @@ jobs:
             file
       - name: Cargo test
         run: cargo test --manifest-path src-tauri/Cargo.toml
+      - name: Cargo clippy (deny warnings)
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 
   playwright-e2e:
     name: Playwright E2E (frontend)
@@ -182,6 +184,10 @@ jobs:
             file
       - name: Cargo test (sqlcipher feature, --test-threads=1)
         run: cargo test --manifest-path src-tauri/Cargo.toml --features sqlcipher -- --test-threads=1 --include-ignored
+      - name: Cargo clippy with sqlcipher (deny warnings)
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --features sqlcipher -- -D warnings
+      - name: Cargo clippy with sqlcipher (deny warnings)
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --features sqlcipher -- -D warnings
 
   linux-build:
     name: Linux Tauri build (smoke)

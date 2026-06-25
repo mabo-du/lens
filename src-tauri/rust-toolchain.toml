@@ -1,0 +1,13 @@
+[toolchain]
+# Resolve charter AE-ENV-001: explicit Rust toolchain pin so reproducer
+# builds use the same channel + components regardless of the host's
+# installed Rust version. Without this, cfg-conditional code and
+# nightly-only APIs become accidentally portable.
+#
+# `default` profile (no `profile =`) keeps the toolchain slim — it's
+# `rustc` + `cargo` + `rust-std` only. The added `components` list
+# forces rustup to install `rustfmt` and `clippy` even under `default`
+# (otherwise the `cargo clippy -D warnings` CI gate fails on a fresh
+# runner with no clippy component).
+channel = "stable"
+components = ["rustfmt", "clippy"]

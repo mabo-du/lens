@@ -1,0 +1,21 @@
+# Lefthook config: delegates to .githooks/pre-commit / .githooks/pre-push
+# so .githooks/ remains the SINGLE SOURCE OF TRUTH for hook commands.
+# Edit `.githooks/pre-commit` and `.githooks/pre-push` to add/change
+# gates; this file stays unchanged. (Sole link between the two hook
+# systems.)
+#
+# `bash` is explicit (not `sh`) because the githooks scripts rely on
+# bash-builtin `set -euo pipefail` + arrays + `[[ ]]` tests.
+
+pre-commit:
+  parallel: false
+  commands:
+    githooks-pre-commit:
+      run: bash .githooks/pre-commit
+      # Fail on non-zero exit (set by .githooks/pre-commit's `set -euo pipefail`).
+
+pre-push:
+  parallel: false
+  commands:
+    githooks-pre-push:
+      run: bash .githooks/pre-push
