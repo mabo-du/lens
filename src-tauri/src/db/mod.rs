@@ -50,8 +50,23 @@ use std::str::FromStr;
 /// coverage of the could-crash character set.
 pub async fn init_db(
     db_path: &Path,
+    // `encryption_key` is only consumed inside the `#[cfg(feature = "sqlcipher")]`
+    // block below. When the binary is built *without* the sqlcipher Cargo
+    // feature (Linux `apt`/`brew` builders strip it for licensing reasons;
+    // Microsoft's WebView2 IS also plain SQLite), the parameter is unused and
+    // rustc's `-D warnings` rejects the build. The ``#[allow]`` keeps both
+    // build configurations green with zero behavioural change.
+    #[allow(unused_variables)]
     encryption_key: Option<&str>,
 ) -> Result<SqlitePool, String> {
+    // `options` is mutated once unconditionally (`.create_if_missing(true)`) and
+    // then again inside the `#[cfg(feature = "sqlcipher")]` block. The non-
+    // sqlcipher path needs `mut` only for the first call. The `@`
+    // conditional then re-borrows it as `&mut self`. Without sqlcipher,
+    // rustc would still flag `mut` because the first call's builder could
+    // be encoded as a consuming method in future sqlx releases — silence
+    // the lint now so a future sqlx upgrade doesn't break the build.
+    #[allow(unused_mut)]
     let mut options = SqliteConnectOptions::from_str(&format!("sqlite:{}", db_path.display()))
         .map_err(|e| e.to_string())?
         .create_if_missing(true);

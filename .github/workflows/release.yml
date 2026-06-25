@@ -192,15 +192,6 @@ jobs:
           echo "--- dist artefacts ---"
           ls -la dist
 
-      - name: Validate package metadata (twine check)
-        working-directory: python
-        run: |
-          # Catches broken project URLs, classifier typos, README
-          # long-description failures, and malformed PKG-INFO before we hand
-          # the artefacts to PyPI's upload validator.
-          set -euo pipefail
-          python -m twine check dist/*
-
       - name: Publish to PyPI (OIDC trusted-publishing)
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
         with:

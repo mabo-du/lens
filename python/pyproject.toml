@@ -9,7 +9,10 @@ build-backend = "setuptools.build_meta"
 name = "lens-qda"
 version = "0.0.0"  # dynamically rewritten in .github/workflows/release.yml from $GITHUB_REF_NAME
 description = "Python utilities for LENS, a local-first qualitative data analysis (QDA) tool."
-readme = { text = "README.md", content-type = "text/markdown" }
+# `file = …` reads the FILE CONTENTS as the project long description; `text = …`
+# would set the literal 9-character string "README.md" (a footgun). PyPI will
+# render this as the package homepage body, so keep it pointing at the file.
+readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.8"
 # SPDX identifier form: universally supported by setuptools' validator across
 # versions that recognise PEP 639. Table form ``license = {file = "LICENSE"}``
