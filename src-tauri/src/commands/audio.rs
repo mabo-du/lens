@@ -70,6 +70,80 @@ pub async fn audio_media_segments(
     Ok(rows)
 }
 
+/// Create a media_selection row for annotating a time range on an audio/video document.
+/// v2+ scaffold — the renderer calls this when the user drags a region on the waveform.
+#[command]
+pub async fn audio_media_selection_create(
+    state: State<'_, AppState>,
+    document_id: String,
+    code_id: String,
+    start_ms: i64,
+    end_ms: i64,
+) -> Result<MediaSegment, String> {
+    audio_media_selection_create_internal(&state, document_id, code_id, start_ms, end_ms).await
+}
+
+/// Internal variant callable from integration tests (no Tauri State wrapper).
+pub async fn audio_media_selection_create_internal(
+    state: &AppState,
+    document_id: String,
+    code_id: String,
+    start_ms: i64,
+    end_ms: i64,
+) -> Result<MediaSegment, String> {
+    let pool_guard = state.db.read().await;
+    let pool = pool_guard.as_ref().ok_or("No project open")?;
+
+    if start_ms < 0 || end_ms <= start_ms {
+        return Err("start_ms must be >= 0 and end_ms > start_ms".to_string());
+    }
+
+    let id = uuid::Uuid::new_v4().to_string();
+
+    let created_by: Option<String> = sqlx::query_scalar("SELECT id FROM local_user LIMIT 1")
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+
+    sqlx::query(
+        "INSERT INTO selection (id, document_id, code_id, selection_type, created_by) VALUES (?, ?, ?, 'media_ts', ?)"
+    )
+    .bind(&id)
+    .bind(&document_id)
+    .bind(&code_id)
+    .bind(&created_by)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    sqlx::query(
+        "INSERT INTO media_selection (selection_id, start_ms, end_ms) VALUES (?, ?, ?)"
+    )
+    .bind(&id)
+    .bind(start_ms)
+    .bind(end_ms)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    tx.commit().await.map_err(|e| e.to_string())?;
+
+    let row = sqlx::query_as::<_, MediaSegment>(
+        "SELECT s.id, s.document_id, ms.start_ms, ms.end_ms, s.code_id, s.memo, s.created_by
+         FROM selection s
+         JOIN media_selection ms ON ms.selection_id = s.id
+         WHERE s.id = ?"
+    )
+    .bind(&id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(row)
+}
+
 /// Ordered transcript lines for the renderer. Word-level rows from the
 /// Whisper sidecar; joined in time order. The frontend collapses this
 /// into display lines (paragraphs) on the render side.

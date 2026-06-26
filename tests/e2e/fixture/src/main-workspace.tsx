@@ -24,6 +24,7 @@ import { DocumentEditor } from '@/components/editor/DocumentEditor';
 import { DocumentList } from '@/components/document-list/DocumentList';
 import { SearchDialog } from '@/components/search/SearchDialog';
 import { FuzzyCodePicker } from '@/components/editor/FuzzyCodePicker';
+import { AnalyticsWorkspace } from '@/components/analytics/AnalyticsWorkspace';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { useProjectStore } from '@/store/projectStore';
@@ -227,8 +228,34 @@ useUiStore.setState({
 // -----------------------------------------------------------------------------
 // Root component — a flex row with the three panels side-by-side, the
 // search dialog mounted at root, ctrl+f shortcut, and tooltip provider.
+// Includes an analytics toggle so e2e tests can exercise the ICR tab.
 // -----------------------------------------------------------------------------
 function FixtureWorkspace() {
+  const [showAnalytics, setShowAnalytics] = React.useState(false);
+
+  if (showAnalytics) {
+    return (
+      <TooltipProvider delay={500}>
+        <div className="flex flex-col h-full w-full bg-slate-100">
+          <div className="h-10 bg-slate-200 flex items-center px-4 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowAnalytics(false)}
+              className="text-xs text-slate-600 hover:text-slate-800"
+            >
+              ← Back to workspace
+            </button>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <AnalyticsWorkspace />
+          </div>
+        </div>
+        <SearchDialog />
+        <FakeFuzzyCodePickerMount />
+      </TooltipProvider>
+    );
+  }
+
   return (
     <TooltipProvider delay={500}>
       <div className="flex flex-row h-full w-full bg-slate-100">
@@ -236,6 +263,15 @@ function FixtureWorkspace() {
           <DocumentList />
         </div>
         <div className="flex-1 min-w-0 flex flex-col">
+          <div className="h-10 bg-slate-200 flex items-center px-4 shrink-0 gap-2">
+            <button
+              type="button"
+              onClick={() => setShowAnalytics(true)}
+              className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+            >
+              Analytics
+            </button>
+          </div>
           <DocumentEditor />
         </div>
         <div className="w-72 border-l border-slate-200 flex flex-col shrink-0">

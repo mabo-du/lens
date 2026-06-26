@@ -21,9 +21,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useProjectStore } from '@/store/projectStore';
 import { analyticsIpc, CoOccurrenceRow, CodeFrequencyRow } from '@/ipc/analytics';
-import { BarChart3, GitBranch, RefreshCw, AlertTriangle } from 'lucide-react';
+import { BarChart3, FlaskConical, GitBranch, RefreshCw, AlertTriangle, SlidersHorizontal, List } from 'lucide-react';
+import { IcrView } from './IcrView';
 
-type Tab = 'freq' | 'co';
+type Tab = 'freq' | 'co' | 'icr';
 
 export function AnalyticsWorkspace() {
   const activeProject = useProjectStore(s => s.activeProject);
@@ -115,10 +116,12 @@ export function AnalyticsWorkspace() {
       <div className="flex items-center gap-2 mb-4 border-b border-slate-200">
         <TabButton active={tab === 'freq'} onClick={() => setTab('freq')} icon={<BarChart3 className="w-4 h-4" />} label="Code Frequency" />
         <TabButton active={tab === 'co'} onClick={() => setTab('co')} icon={<GitBranch className="w-4 h-4" />} label="Co-occurrence" />
+        <TabButton active={tab === 'icr'} onClick={() => setTab('icr')} icon={<FlaskConical className="w-4 h-4" />} label="Inter-coder Reliability" />
       </div>
 
       {tab === 'freq' && <FrequencyView rows={freq} topCodes={topCodes} />}
       {tab === 'co' && <CoOccurrenceView rows={coOcc} topCodes={topCodes} />}
+      {tab === 'icr' && <IcrView annotations={annotations} documents={useProjectStore(s => s.documents)} topCodes={topCodes} />}
     </div>
   );
 }
@@ -169,16 +172,89 @@ function FrequencyView({ rows, topCodes }: { rows: CodeFrequencyRow[]; topCodes:
 
 function CoOccurrenceView({ rows, topCodes }: { rows: CoOccurrenceRow[]; topCodes: { id: string; name: string; color: string; depth: number }[] }) {
   const findById = (id: string) => topCodes.find((x) => x.id === id);
+  const [minCount, setMinCount] = useState(1);
+  const [viewMode, setViewMode] = useState<'heatmap' | 'list'>('heatmap');
+
   if (topCodes.length === 0) return <EmptyState message="Create some codes first to see co-occurrence analytics." />;
   if (rows.length === 0) return <EmptyState message="No overlapping annotations yet. Tag overlapping text spans with multiple codes." />;
 
+  // Filter by minimum co-occurrence count.
+  const filtered = rows.filter((r) => r.count >= minCount);
+
   // Build a small lookup grid for the top 50 cells.
   const cellMap = new Map<string, number>();
-  for (const r of rows) cellMap.set(`${r.codeA}::${r.codeB}`, r.count);
+  for (const r of filtered) cellMap.set(`${r.codeA}::${r.codeB}`, r.count);
 
   const cellIds = topCodes.slice(0, 12).map((c) => c.id);
   const max = Math.max(1, ...Array.from(cellMap.values()));
+  const unfilteredMax = Math.max(1, ...rows.map((r) => r.count));
+  const showFiltered = minCount > 1 && rows.length > 0;
 
+  return (
+    <div className="space-y-3">
+      {/* Filters toolbar */}
+      <div className="flex items-center gap-4 text-sm text-slate-600">
+        <div className="flex items-center gap-2">
+          <SlidersHorizontal className="w-4 h-4" />
+          <span>Min. co-occurrences:</span>
+          <input
+            type="range"
+            min={1}
+            max={Math.max(2, unfilteredMax)}
+            value={minCount}
+            onChange={(e) => setMinCount(Number(e.target.value))}
+            className="w-28"
+          />
+          <span className="tabular-nums w-6 text-right">{minCount}</span>
+        </div>
+        {showFiltered && (
+          <span className="text-xs text-amber-600">
+            {filtered.length} of {rows.length} pairs shown
+          </span>
+        )}
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setViewMode('heatmap')}
+            className={`px-2 py-1 text-xs rounded ${viewMode === 'heatmap' ? 'bg-blue-100 text-blue-700 font-medium' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            Heatmap
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
+            className={`px-2 py-1 text-xs rounded ${viewMode === 'list' ? 'bg-blue-100 text-blue-700 font-medium' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            <List className="w-3 h-3 inline mr-0.5" />
+            Sorted list
+          </button>
+        </div>
+      </div>
+
+      {viewMode === 'heatmap' ? (
+        cellMap.size > 0 ? (
+          <CoOccurrenceHeatmap cellIds={cellIds} cellMap={cellMap} max={max} findById={findById} />
+        ) : (
+          <EmptyState message="No pairs meet the minimum co-occurrence threshold. Lower the filter or add more overlapping annotations." />
+        )
+      ) : (
+        <CoOccurrenceList rows={filtered} findById={findById} max={max} />
+      )}
+    </div>
+  );
+}
+
+function CoOccurrenceHeatmap({
+  cellIds,
+  cellMap,
+  max,
+  findById,
+}: {
+  cellIds: string[];
+  cellMap: Map<string, number>;
+  max: number;
+  findById: (id: string) => { color: string; name: string } | undefined;
+}) {
   return (
     <div className="overflow-x-auto">
       <table className="border-collapse text-xs">
@@ -216,6 +292,43 @@ function CoOccurrenceView({ rows, topCodes }: { rows: CoOccurrenceRow[]; topCode
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function CoOccurrenceList({
+  rows,
+  findById,
+  max,
+}: {
+  rows: CoOccurrenceRow[];
+  findById: (id: string) => { color: string; name: string } | undefined;
+  max: number;
+}) {
+  if (rows.length === 0) return <EmptyState message="No pairs meet the minimum co-occurrence threshold. Lower the filter or add more overlapping annotations." />;
+  return (
+    <div className="space-y-1 max-h-[400px] overflow-y-auto">
+      {rows.map((r) => {
+        const codeA = findById(r.codeA);
+        const codeB = findById(r.codeB);
+        const pct = max > 0 ? (r.count / max) * 100 : 0;
+        return (
+          <div key={`${r.codeA}::${r.codeB}`} className="flex items-center gap-2 text-sm py-1 px-2 rounded hover:bg-slate-100">
+            <ColorDot id={r.codeA} lookup={findById} />
+            <span className="w-32 truncate text-slate-700">{codeA?.name ?? r.codeA}</span>
+            <span className="text-slate-400">×</span>
+            <ColorDot id={r.codeB} lookup={findById} />
+            <span className="w-32 truncate text-slate-700">{codeB?.name ?? r.codeB}</span>
+            <div className="flex-1 h-3 bg-slate-100 rounded ml-2">
+              <div
+                className="h-full rounded bg-indigo-400 transition-all"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <span className="w-10 text-right tabular-nums text-slate-700 font-medium">{r.count}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Schema } from 'prosemirror-model';
 import { EditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
@@ -12,6 +12,7 @@ import { documentsIpc } from '@/ipc/documents';
 import { AnnotationMemoDialog } from '../memos/AnnotationMemoDialog';
 import { toast } from 'sonner';
 import { ImageViewer } from './ImageViewer';
+import { AudioAnnotationView } from '../audio/AudioAnnotationView';
 
 import 'prosemirror-view/style/prosemirror.css';
 
@@ -180,6 +181,31 @@ export function DocumentEditor() {
   // `image_selection` extension row holding the 0..1 bbox coords.
   if (isImageDocument) {
     return <ImageViewer document={document} />;
+  }
+
+  // v2+: Audio/video documents render through AudioAnnotationView
+  // (waveform + transcript + code picker toolbar).
+  const isAudioDocument =
+    !!document &&
+    (document.fileFormat === 'mp3' ||
+      document.fileFormat === 'wav' ||
+      document.fileFormat === 'ogg' ||
+      document.fileFormat === 'flac' ||
+      document.fileFormat === 'mp4' ||
+      document.fileFormat === 'webm');
+
+  const audioCodes = useMemo(
+    () => codes.map((c) => ({ id: c.id, name: c.name, color: c.color })),
+    [codes],
+  );
+
+  if (isAudioDocument) {
+    return (
+      <AudioAnnotationView
+        documentId={document.id}
+        codes={audioCodes}
+      />
+    );
   }
 
   return (

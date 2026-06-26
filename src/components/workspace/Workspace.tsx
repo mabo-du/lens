@@ -23,6 +23,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { SettingsDialog } from '../settings/SettingsDialog';
 import { HelpDialog } from '../settings/HelpDialog';
 import { BackupDialog } from './BackupDialog';
+import { StatusBar } from './StatusBar';
 
 /**
  * Auto-update banner shown in production builds. Dev (`npm run dev`) renders
@@ -454,6 +455,7 @@ export function Workspace({ onImportQdpx }: { onImportQdpx?: () => void }) {
       <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
       <BackupDialog open={backupOpen} onOpenChange={setBackupOpen} />
       <SearchDialog />
+      <StatusBar />
     </div>
   );
 }

@@ -22,6 +22,23 @@ export interface CoOccurrenceRow {
   count: number;
 }
 
+export interface IcrResult {
+  coverageA: number;
+  coverageB: number;
+  agreement: number;
+  expected: number;
+  kappa: number;
+  labelled: string;
+}
+
+export interface IcrResultRow {
+  coderA: string;
+  coderB: string;
+  codeId: string;
+  documentId: string;
+  result: IcrResult | null;
+}
+
 export const analyticsIpc = {
   async codeFrequency(projectId: string): Promise<CodeFrequencyRow[]> {
     try {
@@ -36,6 +53,34 @@ export const analyticsIpc = {
       return await invoke<CoOccurrenceRow[]>('analytics_co_occurrence', { projectId });
     } catch (e) {
       console.warn('[analytics] co_occurrence unavailable', e);
+      return [];
+    }
+  },
+  async icr(
+    projectId: string,
+    coderA: string,
+    coderB: string,
+    codeId: string,
+    documentId: string,
+  ): Promise<IcrResult | null> {
+    try {
+      return await invoke<IcrResult | null>('analytics_icr', {
+        projectId,
+        coderA,
+        coderB,
+        codeId,
+        documentId,
+      });
+    } catch (e) {
+      console.warn('[analytics] icr unavailable', e);
+      return null;
+    }
+  },
+  async icrMatrix(projectId: string): Promise<IcrResultRow[]> {
+    try {
+      return await invoke<IcrResultRow[]>('analytics_icr_matrix', { projectId });
+    } catch (e) {
+      console.warn('[analytics] icr_matrix unavailable', e);
       return [];
     }
   },

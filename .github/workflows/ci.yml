@@ -26,6 +26,8 @@ jobs:
           cache: npm
       - name: Install JS dependencies
         run: npm ci
+      - name: Lint i18n keys (all .po files)
+        run: bash scripts/lint-i18n.sh
       - name: TypeScript typecheck
         run: npx tsc --noEmit
       - name: Vitest

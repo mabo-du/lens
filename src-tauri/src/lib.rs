@@ -22,7 +22,7 @@ pub mod db;
 pub mod import;
 
 #[cfg(test)]
-mod test_helpers;
+pub mod test_helpers;
 #[cfg(test)]
 mod tests;
 
@@ -142,7 +142,10 @@ pub fn run() {
             commands::ollama::autocode_chunk,
             commands::analytics::analytics_code_frequency,
             commands::analytics::analytics_co_occurrence,
+            commands::analytics_icr::analytics_icr,
+            commands::analytics_icr::analytics_icr_matrix,
             commands::audio::audio_media_segments,
+            commands::audio::audio_media_selection_create,
             commands::audio::audio_transcript,
         ])
         .on_window_event(|window, event| {

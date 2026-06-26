@@ -83,6 +83,14 @@ pub async fn document_get_asset_base64(
     state: State<'_, AppState>,
     document_id: String,
 ) -> Result<DocumentAsset, String> {
+    document_get_asset_base64_internal(&state, document_id).await
+}
+
+/// Internal variant callable from integration tests (no Tauri State).
+pub async fn document_get_asset_base64_internal(
+    state: &AppState,
+    document_id: String,
+) -> Result<DocumentAsset, String> {
     use base64::{engine::general_purpose, Engine as _};
 
     let pool_guard = state.db.read().await;
@@ -100,9 +108,15 @@ pub async fn document_get_asset_base64(
     let mime = match file_format.as_str() {
         "png" => "image/png",
         "jpg" | "jpeg" => "image/jpeg",
+        "mp3" => "audio/mpeg",
+        "wav" => "audio/wav",
+        "ogg" => "audio/ogg",
+        "flac" => "audio/flac",
+        "mp4" => "video/mp4",
+        "webm" => "video/webm",
         other => {
             return Err(format!(
-                "Document {} is not a viewable image (file_format={})",
+                "Document {} is not a viewable asset (file_format={})",
                 document_id, other
             ))
         }

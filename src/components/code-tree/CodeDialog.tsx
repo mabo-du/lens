@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -9,6 +9,7 @@ import {
 import { useProjectStore } from '@/store/projectStore';
 import { codesIpc, CodeTreeNode } from '@/ipc/codes';
 import { CodeNodeMeta } from './CodeTree';
+import { InlineCodePicker } from '@/components/ui/InlineCodePicker';
 import { toast } from 'sonner';
 
 const PRESET_COLORS = [
@@ -41,7 +42,8 @@ export function CodeDialog({ open, onOpenChange, codeToEdit, initialParentId }: 
         setName(codeToEdit.name);
         setColor(codeToEdit.color || null);
         setDescription(codeToEdit.description || '');
-        // We can't edit parent id in edit dialog according to requirements, move handles that
+        // Reparenting: seed with the current parent (extracted from the tree).
+        setParentId(findParentId(codes, codeToEdit.id));
       } else {
         setName('');
         setColor(null);
@@ -51,15 +53,36 @@ export function CodeDialog({ open, onOpenChange, codeToEdit, initialParentId }: 
     }
   }, [open, codeToEdit, initialParentId]);
 
-  // Flatten codes for parent selector
-  const flatCodes: { id: string, name: string, depth: number }[] = [];
-  const flatten = (nodes: CodeTreeNode[]) => {
+  // Walk the code tree to find the parent of a given node ID.
+  // Returns null for root-level codes, or a parent ID string.
+  function findParentId(nodes: CodeTreeNode[], targetId: string, parent?: string): string | null {
     for (const node of nodes) {
-      flatCodes.push({ id: node.id, name: node.name, depth: node.depth });
-      if (node.children?.length) flatten(node.children);
+      if (node.id === targetId) return parent ?? null;
+      if (node.children?.length) {
+        const found = findParentId(node.children, targetId, node.id);
+        if (found !== undefined) return found;
+      }
     }
-  };
-  flatten(codes);
+    return null;
+  }
+
+  // Build parent-code options: "Root Level" sentinel + indent-hinted flat list.
+  // Excludes the code being edited to prevent accidental self-referencing cycles.
+  const parentCodeOptions = useMemo(() => {
+    const opts: { id: string; name: string; color: string }[] = [
+      { id: '', name: '— Root Level —', color: '#94a3b8' },
+    ];
+    (function collect(nodes: CodeTreeNode[], depth: number) {
+      for (const node of nodes) {
+        // Skip the code being edited itself (prevents self-referencing cycle).
+        if (codeToEdit && node.id === codeToEdit.id) continue;
+        const indent = '\u00A0\u00A0'.repeat(depth);
+        opts.push({ id: node.id, name: indent + node.name, color: node.color ?? '#94a3b8' });
+        if (node.children?.length) collect(node.children, depth + 1);
+      }
+    })(codes, 0);
+    return opts;
+  }, [codes, codeToEdit]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,8 +94,13 @@ export function CodeDialog({ open, onOpenChange, codeToEdit, initialParentId }: 
         await codesIpc.update(codeToEdit.id, { 
           name: name.trim(), 
           color: color ?? undefined, 
-          description: description.trim() || undefined 
+          description: description.trim() || undefined,
         });
+        // Reparent if the user changed the parent selection.
+        const currentParent = findParentId(codes, codeToEdit.id);
+        if (parentId !== currentParent) {
+          await codesIpc.move(codeToEdit.id, parentId || null);
+        }
       } else {
         await codesIpc.create({
           projectId: activeProject.id, 
@@ -159,24 +187,15 @@ export function CodeDialog({ open, onOpenChange, codeToEdit, initialParentId }: 
             </fieldset>
           </div>
 
-          {!codeToEdit && (
-            <div className="space-y-2">
-              <label htmlFor="code-parent" className="text-sm font-medium">Parent Code</label>
-              <select
-                id="code-parent"
-                className="w-full px-3 py-2 border rounded-md"
-                value={parentId || ''}
-                onChange={e => setParentId(e.target.value || null)}
-              >
-                <option value="">-- Root Level --</option>
-                {flatCodes.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {'\u00A0'.repeat(c.depth * 4)}{c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          <div className="space-y-2">
+            <label htmlFor="code-parent" className="text-sm font-medium">Parent Code</label>
+            <InlineCodePicker
+              id="code-parent"
+              codes={parentCodeOptions}
+              selectedCodeId={parentId ?? ''}
+              onSelect={(id) => setParentId(id || null)}
+            />
+          </div>
 
           <div className="space-y-2">
             <label htmlFor="code-description" className="text-sm font-medium">Description</label>

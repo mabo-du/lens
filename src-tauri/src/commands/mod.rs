@@ -1,4 +1,5 @@
 pub mod analytics;
+pub mod analytics_icr;
 pub mod annotations;
 pub mod audio;
 pub mod backup;

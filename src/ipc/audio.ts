@@ -4,7 +4,7 @@
  * The media machinery runs through `tauri-plugin-shell` invoking the
  * whisper.cpp sidecar (built by `scripts/build-sidecar.sh`) and the
  * Rust-side parser writes rows into the `transcript_segment` table.
- * v0.2 ships the typed surface so the Kova + WaveSurfer wiring team
+ * v0.2 ships the typed surface so the Konva + WaveSurfer wiring team
  * can plug in their components without redoing this contract.
  */
 import { invoke } from '@tauri-apps/api/core';
@@ -36,6 +36,19 @@ export const audioIpc = {
       console.warn('[audio] media_segments unavailable', e);
       return [];
     }
+  },
+  async mediaSelectionCreate(
+    documentId: string,
+    codeId: string,
+    startMs: number,
+    endMs: number,
+  ): Promise<MediaSegment> {
+    return await invoke<MediaSegment>('audio_media_selection_create', {
+      documentId,
+      codeId,
+      startMs,
+      endMs,
+    });
   },
   async transcript(documentId: string): Promise<TranscriptLine[]> {
     try {

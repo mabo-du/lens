@@ -47,11 +47,13 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 
-import { documentsIpc, type DocumentRecord, type DocumentAsset } from '@/ipc/documents';
+import { type DocumentRecord } from '@/ipc/documents';
+import { useAssetBlobUrl } from '@/hooks/useAssetBlobUrl';
 import { imageRegionsIpc, type ImageRegionRecord } from '@/ipc/image-regions';
 import { imagePolygonsIpc, type ImagePolygonRecord } from '@/ipc/image-polygons';
 import { memosIpc } from '@/ipc/memos';
 import { type Code } from '@/ipc/codes';
+import { InlineCodePicker } from '@/components/ui/InlineCodePicker';
 import { useProjectStore } from '@/store/projectStore';
 import { RegionMemoDialog } from '@/components/memos/RegionMemoDialog';
 import {
@@ -121,28 +123,22 @@ export function ImageViewer({ document }: { document: DocumentRecord }) {
   const [selectedCodeId, setSelectedCodeId] = useState<string | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
 
-  // 1. Load the bitmap.
+  // 1. Load the bitmap via the shared asset blob URL hook.
+  const blobUrl = useAssetBlobUrl(documentId);
+
   useEffect(() => {
+    if (!blobUrl) return;
     let cancelled = false;
-    setImage(null);
-    (async () => {
-      try {
-        const asset: DocumentAsset = await documentsIpc.getAsset(documentId);
-        const dataUrl = `data:${asset.mime};base64,${asset.b64}`;
-        const img = new window.Image();
-        img.onload = () => {
-          if (!cancelled) setImage(img);
-        };
-        img.onerror = () => {
-          if (!cancelled) toast.error(`Failed to decode image asset for ${title}`);
-        };
-        img.src = dataUrl;
-      } catch (e) {
-        if (!cancelled) toast.error(`Failed to load image asset: ${String(e)}`);
-      }
-    })();
+    const img = new window.Image();
+    img.onload = () => {
+      if (!cancelled) setImage(img);
+    };
+    img.onerror = () => {
+      if (!cancelled) toast.error(`Failed to decode image asset for ${title}`);
+    };
+    img.src = blobUrl;
     return () => { cancelled = true; };
-  }, [documentId, title]);
+  }, [blobUrl, title]);
 
   // 2. Refresh regions + polygons whenever the document changes.
   const refreshRegions = useCallback(async () => {
@@ -529,22 +525,13 @@ export function ImageViewer({ document }: { document: DocumentRecord }) {
           {codes.length === 0 && (
             <span className="text-xs text-slate-400">No codes yet — create one in the Code Tree panel first.</span>
           )}
-          {codes.map(c => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => setSelectedCodeId(c.id === selectedCodeId ? null : c.id)}
-              className={`px-2 py-1 rounded text-xs font-medium border ${
-                selectedCodeId === c.id
-                  ? 'ring-2 ring-offset-1 ring-slate-900 border-slate-900'
-                  : 'border-slate-200 hover:border-slate-400'
-              }`}
-              style={{ background: c.color, color: '#fff' }}
-              title={c.description ?? undefined}
-            >
-              {c.name}
-            </button>
-          ))}
+          {codes.length > 0 && (
+            <InlineCodePicker
+              codes={codes.map(c => ({ id: c.id, name: c.name, color: c.color }))}
+              selectedCodeId={selectedCodeId ?? ''}
+              onSelect={(id) => setSelectedCodeId(id === selectedCodeId ? null : id)}
+            />
+          )}
           <span className="text-xs text-slate-400 ml-auto">{helpText}</span>
         </div>
       </div>

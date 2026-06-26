@@ -2259,6 +2259,386 @@ async fn document_get_asset_base64_rejects_non_image() {
     );
 }
 
+// ===========================================================================
+// ICR (Inter-coder Reliability) — Cohen's kappa unit + integration tests
+// ===========================================================================
+
+use crate::commands::analytics_icr;
+
+#[test]
+fn icr_spans_to_binary_empty() {
+    let v = analytics_icr::spans_to_binary(&[], 10);
+    assert_eq!(v, vec![0u8; 10]);
+}
+
+#[test]
+fn icr_spans_to_binary_single_span() {
+    let v = analytics_icr::spans_to_binary(&[(2, 5)], 8);
+    assert_eq!(v, vec![0, 0, 1, 1, 1, 0, 0, 0]);
+}
+
+#[test]
+fn icr_spans_to_binary_sorts_out_of_order() {
+    // Spans are deliberately out of order: (8,12), (0,4), (3,8)
+    // After sort-then-sweep they merge to [0,12) — positions 0-11 = all 1s.
+    let v = analytics_icr::spans_to_binary(&[(8, 12), (0, 4), (3, 8)], 12);
+    let expected: Vec<u8> = vec![1u8; 12];
+    assert_eq!(v, expected, "spans_to_binary must sort before sweep");
+}
+
+#[test]
+fn icr_kappa_label_buckets() {
+    assert_eq!(analytics_icr::kappa_label(-0.5), "poor");
+    assert_eq!(analytics_icr::kappa_label(0.0), "slight");
+    assert_eq!(analytics_icr::kappa_label(0.2), "slight");
+    assert_eq!(analytics_icr::kappa_label(0.21), "fair");
+    assert_eq!(analytics_icr::kappa_label(0.41), "moderate");
+    assert_eq!(analytics_icr::kappa_label(0.61), "substantial");
+    assert_eq!(analytics_icr::kappa_label(0.81), "almost perfect");
+    assert_eq!(analytics_icr::kappa_label(1.0), "almost perfect");
+}
+
+#[test]
+fn icr_compute_kappa_perfect_agreement() {
+    let result = analytics_icr::compute_kappa(&[(2, 5)], &[(2, 5)], 10);
+    let r = result.expect("kappa should be defined");
+    assert!((r.kappa - 1.0).abs() < 1e-6);
+    assert_eq!(r.coverage_a, 3);
+    assert_eq!(r.coverage_b, 3);
+    assert_eq!(r.labelled, "almost perfect");
+}
+
+#[test]
+fn icr_compute_kappa_total_disagreement() {
+    let result = analytics_icr::compute_kappa(&[(0, 5)], &[(5, 10)], 10);
+    let r = result.expect("kappa should be defined");
+    assert!(r.kappa < 0.0, "total disagreement -> negative k");
+    assert_eq!(r.labelled, "poor");
+}
+
+#[test]
+fn icr_compute_kappa_null_on_collapsed_denominator() {
+    assert!(analytics_icr::compute_kappa(&[(0, 10)], &[(0, 10)], 10).is_none());
+    assert!(analytics_icr::compute_kappa(&[], &[], 10).is_none());
+}
+
+#[tokio::test]
+async fn icr_internal_returns_kappa_for_seeded_annotations() {
+    let (state, _temp_dir) = setup_test_state().await;
+
+    let project = projects_create_internal(
+        &state, "ICR Test".to_string(), None,
+        _temp_dir.path().to_string_lossy().to_string(), None,
+    ).await.expect("create project");
+
+    let user_a = seed_local_user(&state).await;
+
+    // Create second coder
+    let pool_guard = state.db.read().await;
+    let pool = pool_guard.as_ref().expect("No DB");
+    sqlx::query("INSERT INTO local_user (id, display_name) VALUES ('user-b', 'Coder B')")
+        .execute(pool).await.expect("insert coder B");
+    drop(pool_guard);
+
+    let doc = documents_import_internal(
+        None, &state, project.id.clone(), "/tmp/icr-test.txt".to_string(),
+        "txt".to_string(),
+        Some("Hello world, this is a test document for ICR.".to_string()),
+        None,
+    ).await.expect("import doc");
+
+    let code = codes_create_internal(
+        &state, project.id.clone(), None, "Theme A".to_string(), Some("#FF0000".to_string()),
+    ).await.expect("create code");
+
+    // Seed: A tags [0,11) + [17,22), B tags [6,22)
+    let pool_guard = state.db.read().await;
+    let pool = pool_guard.as_ref().expect("No DB");
+
+    sqlx::query("INSERT INTO selection (id, document_id, code_id, selection_type, created_by) VALUES ('s-a1', ?, ?, 'text', ?)")
+        .bind(&doc.id).bind(&code.id).bind(&user_a).execute(pool).await.expect("s-a1");
+    sqlx::query("INSERT INTO text_selection (selection_id, start_char, end_char) VALUES ('s-a1', 0, 11)")
+        .execute(pool).await.expect("ts-a1");
+
+    sqlx::query("INSERT INTO selection (id, document_id, code_id, selection_type, created_by) VALUES ('s-b1', ?, ?, 'text', ?)")
+        .bind(&doc.id).bind(&code.id).bind("user-b").execute(pool).await.expect("s-b1");
+    sqlx::query("INSERT INTO text_selection (selection_id, start_char, end_char) VALUES ('s-b1', 6, 22)")
+        .execute(pool).await.expect("ts-b1");
+
+    sqlx::query("INSERT INTO selection (id, document_id, code_id, selection_type, created_by) VALUES ('s-a2', ?, ?, 'text', ?)")
+        .bind(&doc.id).bind(&code.id).bind(&user_a).execute(pool).await.expect("s-a2");
+    sqlx::query("INSERT INTO text_selection (selection_id, start_char, end_char) VALUES ('s-a2', 17, 22)")
+        .execute(pool).await.expect("ts-a2");
+
+    drop(pool_guard);
+
+    let result = analytics_icr::analytics_icr_internal(
+        &state, project.id, user_a, "user-b".to_string(), code.id, doc.id,
+    ).await.expect("analytics_icr_internal should succeed");
+
+    let r = result.expect("kappa should be defined");
+    assert!((r.kappa - 0.43).abs() < 0.05, "expected k ~ 0.43, got {}", r.kappa);
+    assert_eq!(r.labelled, "moderate");
+    assert_eq!(r.coverage_a, 16);
+    assert_eq!(r.coverage_b, 16);
+}
+
+// ===========================================================================
+// Audio — media_selection_create round-trip integration test
+// ===========================================================================
+
+use crate::commands::audio;
+
+#[tokio::test]
+async fn audio_media_selection_create_round_trip() {
+    let (state, _temp_dir) = setup_test_state().await;
+
+    let project = projects_create_internal(
+        &state,
+        "Audio MS Create Test".to_string(),
+        None,
+        _temp_dir.path().to_string_lossy().to_string(),
+        None,
+    )
+    .await
+    .expect("Failed to create project");
+
+    let _user_id = seed_local_user(&state).await;
+
+    // Seed a synthetic audio document for the FK constraint.
+    let doc_id = "doc-audio-ms";
+    {
+        let pool_guard = state.db.read().await;
+        let pool = pool_guard.as_ref().expect("No DB");
+        sqlx::query(
+            "INSERT INTO document (id, project_id, title, file_format, plain_text, text_hash, extractor_id) \
+             VALUES (?, ?, ?, ?, NULL, ?, ?)",
+        )
+        .bind(doc_id)
+        .bind(&project.id)
+        .bind("interview.mp3")
+        .bind("mp3")
+        .bind("audio-hash-1234567890123456789012345678901234567890123456789012345678901234")
+        .bind("test-fixture")
+        .execute(pool)
+        .await
+        .expect("seed audio document");
+    }
+
+    let code = codes_create_internal(
+        &state,
+        project.id.clone(),
+        None,
+        "Theme A".to_string(),
+        Some("#FF0000".to_string()),
+    )
+    .await
+    .expect("Failed to create code");
+
+    // Call the internal variant directly.
+    let segment = audio::audio_media_selection_create_internal(
+        &state,
+        doc_id.to_string(),
+        code.id.clone(),
+        1000,
+        5000,
+    )
+    .await
+    .expect("audio_media_selection_create should succeed");
+
+    assert_eq!(segment.document_id, doc_id);
+    assert_eq!(segment.code_id, Some(code.id));
+    assert_eq!(segment.start_ms, 1000);
+    assert_eq!(segment.end_ms, 5000);
+    assert!(segment.created_by.is_some(), "created_by should be auto-populated");
+    assert!(!segment.id.is_empty(), "id should be non-empty");
+
+    // Verify the row exists via SELECT JOIN.
+    let pool_guard = state.db.read().await;
+    let pool = pool_guard.as_ref().expect("No DB");
+    let (sel_id, start, end): (String, i64, i64) = sqlx::query_as(
+        "SELECT s.id, ms.start_ms, ms.end_ms \
+         FROM selection s JOIN media_selection ms ON ms.selection_id = s.id \
+         WHERE s.id = ?",
+    )
+    .bind(&segment.id)
+    .fetch_one(pool)
+    .await
+    .expect("media_selection should exist in DB");
+    assert_eq!(start, 1000);
+    assert_eq!(end, 5000);
+    assert_eq!(sel_id, segment.id);
+
+    // Verify selection_type is 'media_ts'.
+    let sel_type: String = sqlx::query_scalar(
+        "SELECT selection_type FROM selection WHERE id = ?",
+    )
+    .bind(&segment.id)
+    .fetch_one(pool)
+    .await
+    .expect("fetch selection_type");
+    assert_eq!(sel_type, "media_ts");
+    drop(pool_guard);
+}
+
+#[tokio::test]
+async fn icr_matrix_internal_returns_multiple_pairs() {
+    let (state, _temp_dir) = setup_test_state().await;
+
+    let project = projects_create_internal(
+        &state, "ICR Matrix Test".to_string(), None,
+        _temp_dir.path().to_string_lossy().to_string(), None,
+    ).await.expect("create project");
+
+    let user_a = seed_local_user(&state).await;
+
+    // Create second and third coders.
+    let pool_guard = state.db.read().await;
+    let pool = pool_guard.as_ref().expect("No DB");
+    sqlx::query("INSERT INTO local_user (id, display_name) VALUES ('user-b', 'Coder B')")
+        .execute(pool).await.expect("insert coder B");
+    sqlx::query("INSERT INTO local_user (id, display_name) VALUES ('user-c', 'Coder C')")
+        .execute(pool).await.expect("insert coder C");
+    drop(pool_guard);
+
+    let doc = documents_import_internal(
+        None, &state, project.id.clone(), "/tmp/icr-matrix.txt".to_string(),
+        "txt".to_string(),
+        Some("The quick brown fox jumps over the lazy dog.".to_string()),
+        None,
+    ).await.expect("import doc");
+
+    let code_x = codes_create_internal(
+        &state, project.id.clone(), None, "Code X".to_string(), Some("#FF0000".to_string()),
+    ).await.expect("create code X");
+    let code_y = codes_create_internal(
+        &state, project.id.clone(), None, "Code Y".to_string(), Some("#0000FF".to_string()),
+    ).await.expect("create code Y");
+
+    // Seed annotations: A tags [0,10) in X, B tags [4,16) in X, C tags [0,10) in X
+    // A tags [20,30) in Y, B tags [24,34) in Y
+    let pool_guard = state.db.read().await;
+    let pool = pool_guard.as_ref().expect("No DB");
+
+    sqlx::query("INSERT INTO selection (id, document_id, code_id, selection_type, created_by) VALUES ('sxa', ?, ?, 'text', ?)")
+        .bind(&doc.id).bind(&code_x.id).bind(&user_a).execute(pool).await.expect("sxa");
+    sqlx::query("INSERT INTO text_selection (selection_id, start_char, end_char) VALUES ('sxa', 0, 10)")
+        .execute(pool).await.expect("ts-xa");
+
+    sqlx::query("INSERT INTO selection (id, document_id, code_id, selection_type, created_by) VALUES ('sxb', ?, ?, 'text', ?)")
+        .bind(&doc.id).bind(&code_x.id).bind("user-b").execute(pool).await.expect("sxb");
+    sqlx::query("INSERT INTO text_selection (selection_id, start_char, end_char) VALUES ('sxb', 4, 16)")
+        .execute(pool).await.expect("ts-xb");
+
+    sqlx::query("INSERT INTO selection (id, document_id, code_id, selection_type, created_by) VALUES ('sxc', ?, ?, 'text', ?)")
+        .bind(&doc.id).bind(&code_x.id).bind("user-c").execute(pool).await.expect("sxc");
+    sqlx::query("INSERT INTO text_selection (selection_id, start_char, end_char) VALUES ('sxc', 0, 10)")
+        .execute(pool).await.expect("ts-xc");
+
+    sqlx::query("INSERT INTO selection (id, document_id, code_id, selection_type, created_by) VALUES ('sya', ?, ?, 'text', ?)")
+        .bind(&doc.id).bind(&code_y.id).bind(&user_a).execute(pool).await.expect("sya");
+    sqlx::query("INSERT INTO text_selection (selection_id, start_char, end_char) VALUES ('sya', 20, 30)")
+        .execute(pool).await.expect("ts-ya");
+
+    sqlx::query("INSERT INTO selection (id, document_id, code_id, selection_type, created_by) VALUES ('syb', ?, ?, 'text', ?)")
+        .bind(&doc.id).bind(&code_y.id).bind("user-b").execute(pool).await.expect("syb");
+    sqlx::query("INSERT INTO text_selection (selection_id, start_char, end_char) VALUES ('syb', 24, 34)")
+        .execute(pool).await.expect("ts-yb");
+
+    drop(pool_guard);
+
+    let results = analytics_icr::analytics_icr_matrix_internal(&state, project.id)
+        .await.expect("analytics_icr_matrix_internal should succeed");
+
+    // Code X: (A,B),(A,C),(B,C)=3. Code Y: (A,B)=1. Total=4.
+    assert_eq!(results.len(), 4, "should have 4 rows for 3 coder pairs in X + 1 pair in Y");
+
+    for row in &results {
+        assert!(!row.coder_a.is_empty());
+        assert!(!row.coder_b.is_empty());
+        assert!(!row.code_id.is_empty());
+        assert!(!row.document_id.is_empty());
+    }
+
+    let ac_x = results.iter().find(|r|
+        r.code_id == code_x.id
+            && ((r.coder_a == user_a && r.coder_b == "user-c") || (r.coder_a == "user-c" && r.coder_b == user_a))
+    ).expect("A-C pair for Code X should exist");
+    let r = ac_x.result.as_ref().expect("AC-X kappa should be defined");
+    assert!((r.kappa - 1.0).abs() < 0.01, "AC on Code X should have perfect kappa, got {}", r.kappa);
+
+    let ab_y = results.iter().find(|r|
+        r.code_id == code_y.id
+            && ((r.coder_a == user_a && r.coder_b == "user-b") || (r.coder_a == "user-b" && r.coder_b == user_a))
+    ).expect("A-B pair for Code Y should exist");
+    assert!(ab_y.result.is_some(), "AB-Y kappa should be defined");
+
+    for window in results.windows(2) {
+        let k0 = window[0].result.as_ref().map(|r| r.kappa).unwrap_or(-2.0);
+        let k1 = window[1].result.as_ref().map(|r| r.kappa).unwrap_or(-2.0);
+        assert!(k0 >= k1, "results should be sorted by kappa descending");
+    }
+}
+
+// ===========================================================================
+// Document asset — test audio format base64 retrieval
+// ===========================================================================
+
+use crate::commands::documents;
+
+#[tokio::test]
+async fn document_get_asset_base64_returns_audio_mime() {
+    let (state, _temp_dir) = setup_test_state().await;
+
+    let project = projects_create_internal(
+        &state,
+        "Audio Asset Test".to_string(),
+        None,
+        _temp_dir.path().to_string_lossy().to_string(),
+        None,
+    )
+    .await
+    .expect("Failed to create project");
+
+    // Seed an mp3 document with a synthetic asset file.
+    let doc_id = "doc-audio-asset";
+    let pool_guard = state.db.read().await;
+    let pool = pool_guard.as_ref().expect("No DB");
+    sqlx::query(
+        "INSERT INTO document (id, project_id, title, file_format, plain_text, text_hash, extractor_id) \
+         VALUES (?, ?, ?, ?, NULL, ?, ?)",
+    )
+    .bind(doc_id)
+    .bind(&project.id)
+    .bind("interview.mp3")
+    .bind("mp3")
+    .bind("mp3-hash-0123456789012345678901234567890123456789012345678901234567890123")
+    .bind("test-fixture")
+    .execute(pool)
+    .await
+    .expect("seed mp3 document");
+    drop(pool_guard);
+
+    // Write a dummy mp3 asset file to the project's assets dir.
+    let folder_guard = state.project_folder.read().await;
+    let folder = folder_guard.as_ref().expect("project folder");
+    let assets_dir = folder.join("assets");
+    std::fs::create_dir_all(&assets_dir).expect("create assets dir");
+    let asset_path = assets_dir.join(format!("{}.mp3", doc_id));
+    let dummy_bytes = b"\xff\xfb\x90\x00\x00\x00\x00\x00\x00\x00\x00"; // minimal MPEG frame header
+    std::fs::write(&asset_path, dummy_bytes).expect("write dummy mp3");
+    drop(folder_guard);
+
+    // Call the internal variant so we can test without Tauri State.
+    let result = documents::document_get_asset_base64_internal(&state, doc_id.to_string())
+        .await
+        .expect("should read mp3 asset");
+
+    assert_eq!(result.mime, "audio/mpeg");
+    assert!(!result.b64.is_empty(), "b64 should be non-empty");
+    assert!(result.b64.len() >= 8, "b64 should encode at least a few bytes");
+}
+
 /// Validates the image_polygon schema path works end-to-end:
 /// insert a `selection` parent + `image_polygon` extension row inside
 /// an explicit transaction, query back via SELECT JOIN, then delete
