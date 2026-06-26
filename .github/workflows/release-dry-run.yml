@@ -66,3 +66,26 @@ jobs:
             src-tauri/target/release/lens.exe
             src-tauri/target/release/bundle/
           if-no-files-found: warn
+
+      # Round-12 followup: smoke run during manual dry-runs so maintainers
+      # who use workflow_dispatch to check the pipeline never publish an
+      # #unknown downstream regression undetected.
+      # Linux-only; the smoke harness is host-independent so we deliberately
+      # don't gate `runs-on:` here. If a future maintainer retargets this
+      # dry-run to macOS/Windows runners, the smoke will still run on Linux;
+      # the matrix compatibility must be verified separately per-CI smoke.
+      - name: Run no-UI smoke test
+        shell: bash
+        run: bash scripts/smoke-test.sh
+
+      - name: Upload smoke artefacts (dry-run)
+        if: always()
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+        with:
+          name: lens-smoke-output-dry
+          path: |
+            /tmp/lens-smoke-export.*
+            /tmp/lens-smoke-report.*
+            /tmp/lens-fixtures.sha256
+          if-no-files-found: ignore
+          retention-days: 7

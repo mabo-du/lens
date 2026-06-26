@@ -151,6 +151,44 @@ jobs:
           # invoking locally or in a one-off workflow -- only use the
           # matrix-driven form above.
 
+      # Round-12 followup (smoke gate for v0.2.x release pipeline).
+      # Smoke runs ONLY on the Linux matrix cell because:
+      #   - The shell-based smoke harness is host-independent (runs everywhere
+      #     bash+python3+sqlite3+xmllint-or-fallback+unzip+od exist).
+      #   - The Linux runner is the natural home — it already ships all
+      #     smoke dependencies and the freshly-built `lens` binary.
+      #   - Adding a smoke step to Windows/macOS-latest cells would either
+      #     require cross-platform shell packaging (msys bash on Windows,
+      #     coreutils shims on macOS) or duplicate the suite. The
+      #     Linux cell alone catches the regressions that matter for the
+      #     export pipeline.
+      # Failure semantics: a smoke-FAIL aborts the Linux matrix cell, which
+      # surfaces a red X on the workflow run and signals the maintainer that
+      # the GitHub Release draft is NOT publish-ready. publish-pypi runs in
+      # parallel and is NOT gated on smoke (a UI/CLI regression in Tauri
+      # shouldn't yank a strictly-Python package from PyPI).
+      - name: Run no-UI smoke test (Linux cell)
+        if: matrix.platform == 'ubuntu-22.04'
+        shell: bash
+        run: bash scripts/smoke-test.sh
+        # Round-13: this smoke failure does NOT auto-cancel the draft
+        # release (tauri-action already created the draft with assets).
+        # Maintainers MUST read the Actions tab and confirm a green ✓
+        # on this Linux matrix cell BEFORE clicking Publish release.
+        # The red ✗ on this cell is the gate; the draft is the data.
+
+      - name: Upload smoke artefacts (Linux cell)
+        if: matrix.platform == 'ubuntu-22.04' && always()
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: lens-smoke-output
+          path: |
+            /tmp/lens-smoke-export.*
+            /tmp/lens-smoke-report.*
+            /tmp/lens-fixtures.sha256
+          if-no-files-found: ignore
+          retention-days: 7
+
   publish-pypi:
     name: Publish lens-qda to PyPI (OIDC trusted publishing)
     runs-on: ubuntu-22.04
@@ -263,10 +301,13 @@ jobs:
         # on top, and create a FRESH annotated tag (e.g. v0.2.0). NB the
         # constraint is filename-uniqueness, not version-uniqueness: an sdist
         # upload under an existing lens-qda==0.2.0rc2 version IS permitted
-        # (PyPI rejects same-wheel-filename, not same-version). If you have
-        # to overwrite a specific wheel WITHOUT bumping the version stamp,
-        # delete the existing file via the PyPI web UI (Project > Files >
-        # select file > Options > Delete), then twine upload the new wheel.
+        # (PyPI rejects same-wheel-filename, not same-version). PyPI does
+        # NOT expose a per-file Delete in the web UI - the only direct
+        # invalidation is YANK the entire release (Project > Releases >
+        # select > Yank), which makes the wheel uninstallable while
+        # preserving the version entry; PyPI admin file removal is gated.
+        # To replace a wheel without bumping the version stamp, yank first
+        # then ask PyPI support OR cut a new version.
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
         with:
           packages-dir: python/dist

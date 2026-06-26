@@ -259,3 +259,22 @@ jobs:
           name: lens-binary
           path: src-tauri/target/release/lens
           if-no-files-found: ignore
+
+      # Round-12 followup: PR-time smoke gate. Runs in the same Linux
+      # runner as the build (zero queue time, no extra artifact transfer)
+      # so a regression-corroborating PR surfaces a smell before merge.
+      - name: Run no-UI smoke test
+        shell: bash
+        run: bash scripts/smoke-test.sh
+
+      - name: Upload smoke artefacts
+        if: always()
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: lens-smoke-output
+          path: |
+            /tmp/lens-smoke-export.*
+            /tmp/lens-smoke-report.*
+            /tmp/lens-fixtures.sha256
+          if-no-files-found: ignore
+          retention-days: 7

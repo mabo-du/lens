@@ -88,6 +88,57 @@ if [ ! -f "$DB" ]; then
 fi
 echo
 
+# --- Section 5: NEGATIVE verifier regression corpus ---
+# Round-12 followup: four intentionally-broken artefacts under
+# tests/fixtures/smoke/negative/. The verifiers MUST reject these
+# (exit != 0). Without this corpus, a verifier could regress to a
+# no-op (always PASS) and ship undetected. One positive-of-edge-case
+# artefact (doublebom.csv) proves the round-11 multi-BOM strip works.
+echo '== [5] negative/edge verifier regression corpus =='
+NEG="tests/fixtures/smoke/negative"
+if [ -d "$NEG" ]; then
+  # 4 negatives: each verifier MUST return exit != 0
+  EXPECT_FAIL=0
+  for pair in \
+      'corrupt.qdpx|verify-export-qdpx.sh' \
+      'corrupt.qdc|verify-export-qdc.sh' \
+      'nobom.csv|verify-export-csv.sh' \
+      'no-title.html|verify-export-html.sh'; do
+    IFS='|' read -r fixture verifier <<<"$pair"
+    f="$NEG/$fixture"
+    if [ ! -f "$f" ]; then
+      echo "  WARN: $f missing (the corpus drifted)"
+      EXPECT_FAIL=$((EXPECT_FAIL+1))
+      continue
+    fi
+    code=0
+    bash "scripts/verify/$verifier" "$f" >/tmp/lens-neg.outer 2>&1 || code=$?
+    if [ "$code" -ne 0 ]; then
+      echo "  REJECT OK: $verifier \"$fixture\" exited $code (regression corpus line intact)"
+    else
+      echo "  REGRESS: $verifier \"$fixture\" exited 0 (expected non-zero — verifier regressed to no-op)"
+      EXPECT_FAIL=$((EXPECT_FAIL+1))
+    fi
+  done
+  if [ "$EXPECT_FAIL" -gt 0 ]; then
+    echo "FAIL: $EXPECT_FAIL negative-corpus items regressed (verifier no longer rejects bad inputs)"
+    FAIL=$((FAIL+EXPECT_FAIL))
+  fi
+  # 1 positive-of-edge-case: verify-export-csv.sh MUST accept double-BOM CSV
+  doublebom="$NEG/doublebom.csv"
+  if [ -f "$doublebom" ]; then
+    if bash scripts/verify/verify-export-csv.sh "$doublebom" >/tmp/lens-neg.pos 2>&1; then
+      echo '  PASS EDGE: verify-export-csv.sh doublebom.csv (round-11 multi-BOM strip works)'
+    else
+      echo '  FAIL: verify-export-csv.sh doublebom.csv (round-11 multi-BOM strip regressed)'
+      FAIL=$((FAIL+1))
+    fi
+  fi
+else
+  echo '  WARN: tests/fixtures/smoke/negative/ missing (Section 5 skipped)'
+fi
+echo
+
 # --- Skipped UI-only steps (informational) ---
 # Gated on Phase 5.2 (Tauri WebView driver / Playwright-on-WebView integration).
 # Today's runner validates the CLI-validatable subset per SMOKE_TEST §6.
