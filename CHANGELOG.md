@@ -82,6 +82,39 @@ clean tags without manual re-runs.
   `StatusBar.test.tsx` import from the new file. The unit test
   no longer transitively loads the project/ui Zustand stores.
 
+### Recovery (v0.2.3 follow-up commit on `main`)
+
+The v0.2.3 GitHub Release entry stayed in **draft** even though the
+release workflow finished with macOS + Ubuntu + Windows + PyPI all
+green. The `verify-publish` job's precondition `gh release view
+"${{ github.ref_name }}"` failed with
+`failed to run git: fatal: not a git repository (or any of the
+parent directories): .git` because the job lacked an `actions/checkout`
+step — `gh CLI` infers `owner/repo` from the cwd git remote, and the
+runner had neither cwd nor remote. The error surfaced as
+`::error::no draft release for v0.2.3`, which was a misleading
+message (the draft DID exist with all 5 platform assets attached).
+
+- **Fix on `main` (commit on top of the v0.2.3 + version-bump wave):**
+  `.github/workflows/release.yml` `verify-publish` job now passes
+  `--repo ${{ github.repository }}` to BOTH `gh release view` and
+  `gh release edit`, removing the cwd git-inference requirement.
+  A 3×20s retry loop with stderr capture to `/tmp/lens-relview.log`
+  hardens against the rare race where `verify-publish` starts before
+  the GitHub release index has caught up with `tauri-action`'s last
+  matrix entry's asset upload; the captured stderr is rendered as a
+  proper `::error::` line in the failed-step annotation, so future
+  maintainers see the actual reason (404 / 5xx / auth / network-blip
+  / indexing-latency) rather than a generic "draft not queryable".
+- **Manual flip of the v0.2.3 draft**: the v0.2.3 GH Release page
+  (`https://github.com/mabo-du/lens/releases/tag/v0.2.3`) is now
+  **published** (draft=false) thanks to
+  `gh release edit --draft=false --repo mabo-du/lens v0.2.3`. All
+  five platform assets (.deb, .AppImage, .dmg, .exe) and the
+  release notes are now visible to end-users. PyPI `lens-qda==0.2.3`
+  was already published at workflow time. Future v0.2.x tags auto-
+  promote through the fixed `verify-publish` without manual help.
+
 ## [0.2.2] - 2026-06-26
 
 *Note: This release was cut but its GitHub Release entry remained in

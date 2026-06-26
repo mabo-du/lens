@@ -229,10 +229,49 @@ jobs:
       # loudly (it skips this job), so this precondition is for the subtler
       # partial-run / manual-dispatch case where the build succeeded WITHOUT
       # tauri-action ever producing a release draft (org-blocklist scenario).
+      # v0.2.3-followup fix: pass ``--repo ${{ github.repository }}`` to
+      # every ``gh`` call (this job does NOT have actions/checkout, so
+      # ``gh CLI`` had no cwd git context and died with
+      # "failed to run git: fatal: not a git repository (or any of the
+      # parent directories): .git" — surfacing as a spurious
+      # "no draft release for v0.2.3" error even when the draft exists
+      # with all 5 platform assets attached). The ``--repo`` flag also
+      # removes any latent CI runner cwd / git-inference race. A small
+      # retry loop (3 attempts × 20s sleep) provides insurance against
+      # the rare race where this job starts before ``tauri-action``'s
+      # last matrix entry's asset upload has indexed on the GitHub side.
       - name: Verify release draft exists (precondition)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release view "${{ github.ref_name }}" > /dev/null || { echo "::error::no draft release for ${{ github.ref_name }}"; exit 1; }
+        run: |
+          # v0.2.3-followup polish: redirect gh release view stderr to a
+          # per-attempt logfile so the final ::error:: below can surface
+          # the actual reason (404 / 5xx / auth / network-blip / draft
+          # not yet indexed on the GitHub side) rather than a generic
+          # "draft not queryable" trace. The 3*20s retry loop is
+          # intentionally WITHOUT `set -e` -- we want the loop to keep
+          # retrying on transient failures rather than auto-abort on the
+          # first non-zero exit. The `>/dev/null 2>$log` ordering routes
+          # stdout to /dev/null and stderr to the logfile on each loop
+          # iteration (the previous run silently swallowed stderr, which
+          # made the v0.2.3 "no draft release for v0.2.3" message
+          # misleading -- the draft HAD been created with all 5 assets
+          # by tauri-action, but `gh release view` itself died with
+          # "failed to run git".
+          TAG="${{ github.ref_name }}"
+          RELVIEW_LOG=/tmp/lens-relview.log
+          for attempt in 1 2 3; do
+            if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>"$RELVIEW_LOG"; then
+              echo "draft release for $TAG exists (attempt $attempt)"
+              exit 0
+            fi
+            echo "attempt $attempt: draft not yet queryable, sleeping 20s..."
+            sleep 20
+          done
+          echo "::error::no draft release for $TAG after 3 attempts"
+          echo "::error::gh release view last-attempt stderr:"
+          cat "$RELVIEW_LOG" >&2
+          exit 1
 
       - name: Promote draft release (no-op if already published)
         # When smoke was green on the Linux cell, tauri-action has attached
@@ -240,10 +279,11 @@ jobs:
         # promotes the draft to non-draft via `gh release edit --draft=false`,
         # which is the same effect as clicking the green Publish-release
         # button in the GitHub Releases web UI. gh release edit is idempotent
-        # on a non-draft release (no-op + a friendly message).
+        # on a non-draft release (no-op + a friendly message). Same
+        # v0.2.3-followup --repo fix as the precondition step above.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit "${{ github.ref_name }}" --draft=false
+        run: gh release edit "${{ github.ref_name }}" --draft=false --repo "${{ github.repository }}"
 
   publish-pypi:
     name: Publish lens-qda to PyPI (OIDC trusted publishing)
