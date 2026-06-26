@@ -45,13 +45,12 @@ matrix without re-discovering the failure mode.
     over-eager grep).
   - `doublebom.csv` — TWO consecutive UTF-8 BOMs followed by the
     canonical CSV header, exercising the multi-BOM strip pattern.
-- **`.gh_admin_org_setup.md`** — 7-section runbook for org-admins
+- **Org-blocklist lift runbook** — 7-section procedure for org-admins
   to lift the GitHub org-level third-party-action blocklist via 4
   clicks + 1 allowlist entry. Inventory table covers LENS's 4
   third-party consumers (`dtolnay/rust-toolchain`, `Swatinem
   /rust-cache`, `tauri-apps/tauri-action`, `pypa
-  /gh-action-pypi-publish`). Force-tracked despite `.gitignore` so a
-  future maintainer can `git ls-files` it directly.
+  /gh-action-pypi-publish`).
 
 ### Changed
 
@@ -76,9 +75,8 @@ matrix without re-discovering the failure mode.
 
 - **Stalled release matrix diagnosis reproducibility** — the
   `Round-9 followup` comments in the workflow YAML joined the
-  round-12 smoke wiring plus `.gh_admin_org_setup.md` for a
-  documented end-to-end path: see the runbook, lift the blocklist,
-  re-trigger `release.yml`.
+  round-12 smoke wiring for a documented end-to-end path:
+  lift the blocklist, re-trigger `release.yml`.
 - **`scripts/verify/verify-export-csv.sh`** — tightened to
   `grep -Eq '<title(>|/>|[[:space:]])'` (round-14 ERE precision fix)
   so a future HTML report containing a hypothetical `<title-block>`
@@ -100,11 +98,10 @@ matrix without re-discovering the failure mode.
   and Windows `.exe` (nsis). Both require the seven-secrets
   provisioning documented in `docs/onboarding-apple-developer.md`
   §STOP plus the GitHub org-level third-party-action blocklist
-  lift in `.gh_admin_org_setup.md`. The v0.2.1 release as currently
+  lift. The v0.2.1 release as currently
   cut ships **Linux `.deb` + `.AppImage` via local-bypass** only
-  (`gh release create --draft` from a Linux builder with the
-  pdfplumber sidecar compiled in). Once the secrets + blocklist
-  are honest-released, v0.2.1-followup re-runs `release.yml` and
+  (`gh release create --draft` from a Linux builder with  the pdfplumber sidecar compiled in). Once the secrets + blocklist
+  are resolved, v0.2.1-followup re-runs `release.yml` and
   appends the macOS/Windows assets to the existing release via
   `gh release upload`. Without this explicit statement in the
   release notes, users installing on macOS/Windows will see "no
@@ -590,10 +587,9 @@ cat tools/perf/results.json
 #### Maintainer action item
 
 The release matrix is still failing — `github.com/mabo-du/lens` needs
-an `admin:org`-scoped maintainer to inspect + lift the org-level
-third-party-action blocklist on `Settings → Actions → General → Allow
-specified actions`. Steps are written to `.gh_admin_org_setup.md` in
-the repository root.
+an `admin:org`-scopedmaintainer to inspect + lift the org-level third-party-action
+  blocklist on `Settings → Actions → General → Allow specified
+  actions`.
 
 ### v0.2 — Collaboration lock file + lock status indicator (commit-history (`git log`), this commit)
 

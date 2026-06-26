@@ -24,14 +24,14 @@ dist-ssr
 *.sw?
 
 # Agent and tooling artifacts
-# Note: .claude/skills/ is re-included below; project-level Claude SKILL.md
-# files are peer-published tooling and belong in the open-source repo.
+# Note: .claude/skills/ is now gitignored — these are peer-published
+# tooling configs, kept locally but not in the public repo.
 *.charter-session
 .charter/
 .agents/
 .beads/
 .claude/*
-!.claude/skills/
+!.claude/settings.json
 .claude/local/
 .ctx/
 .gitnexus/
@@ -53,14 +53,8 @@ Cargo.lock
 .commitmsg*
 .commit_*.txt
 
-# GitHub admin notes — one-off setup doc that is DELIBERATELY force-tracked.
-# `.gh_admin_org_setup.md` is the org-blocklist lift procedure that future
-# maintainers need BEFORE they can unblock the v0.2.x release matrix. The
-# negation below carves it back in so `git ls-files` finds it. Do not
-# re-ignore without updating `.gh_admin_org_setup.md` cross-refs
-# (README, USER_GUIDE, CHANGELOG).
+# GitHub admin notes — one-off setup doc, not tracked.
 .gh_admin_org_setup.md
-!.gh_admin_org_setup.md
 
 # Charter analysis artefacts
 charter-report.json
@@ -97,7 +91,24 @@ playwright-report/
 test-results/
 .lens-e2e/
 
-# Playwright MCP server ephemeral state (used outside CI during dev).
+# Research prompts (local only, not published)
+docs/research-prompts/
+
+# Screenshots (local dev only, not published)
+docs/assets/screenshots/
+
+# Root planning docs (local reference, not published)
+PROJECT SCOPE*.md
+LENS_Implementation_Plan.md
+
+# Scope doc (local reference, not published)
+docs/scope.md
+
+# Screenshot capture script (local dev tool)
+scripts/lens-screenshots.mjs
+
+# CI artifacts
+ci-artifacts/
 .playwright-mcp/
 
 # Python build + test artifacts (added at v0.2.1 to keep python/tests/ tracked while ignoring pyc + caches)

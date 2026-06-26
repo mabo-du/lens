@@ -1,6 +1,6 @@
 # LENS — User Guide
 
-A screenshot-rich tutorial that walks every LENS surface from first launch to a published `.qdpx` export.
+A tutorial that walks every LENS surface from first launch to a published `.qdpx` export.
 
 > If you've never used a QDA tool before, start with **[§ 2 Concepts](#concepts)**, then **[§ 3 Quickstart](#quickstart)**. If you're switching from NVivo or ATLAS.ti, jump to **[§ 7 Image coding](#image-coding)** — bbox + polygon annotation is what most differences LENS from.
 
@@ -12,7 +12,7 @@ A screenshot-rich tutorial that walks every LENS surface from first launch to a 
 - [4. Workspace tour](#workspace-tour)
 - [5. Project lifecycle](#project-lifecycle)
 - [6. Document imports](#document-imports)
-- [7. Image coding](#image-coding) ← *with screenshots*
+- [7. Image coding](#image-coding)
 - [8. Prose annotation](#prose-annotation)
 - [9. Codebook management](#codebook-management)
 - [10. Memos](#memos)
@@ -31,8 +31,6 @@ A screenshot-rich tutorial that walks every LENS surface from first launch to a 
 
 - [`README.md`](../README.md) — installation, dev workflow, release process, license.
 - [`ARCHITECTURE.md`](../ARCHITECTURE.md) — the 16-chapter sourcebook for the data model, IPC contract, and closure-table math. Read this if you want to *modify* LENS.
-- [`docs/scope.md`](scope.md) — the scope agreement (what's in, what's deferred).
-- [`docs/onboarding-apple-developer.md`](onboarding-apple-developer.md) — Apple signing/notarisation runbook for maintainers.
 - [`docs/research-papers/`](../docs/research-papers/) — 19 design notes underpinning the implementation; referenced from `ARCHITECTURE.md` chapters.
 
 This guide is the user-facing companion to the README. The architecture doc lives next door for whenever you need to know *why* a surface behaves a certain way.
@@ -77,13 +75,11 @@ A fourth rail — **TopNav** — sits above the three panels and exposes project
 
 A subtle **lock badge** (🔒 + your display name) appears in the **TopNav**'s left side whenever a project is open, indicating you hold the collaboration lock for that project. See [§ 15](#collaboration-lock).
 
-### Image coder (the most-screenshotted surface)
+### Image coder
 
-The image coder mounts when you click an `.png` / `.jpg` document in the rail:
+The image coder mounts when you click an `.png` / `.jpg` document in the rail.
 
-![image viewer landing — toolbar pill toggle, code picker, fresh canvas](assets/screenshots/01-landing.png)
-
-> **Fixtures vs. real data:** the screenshots in this guide are captured from the Playwright fixture (`tests/e2e/fixture/`), which seeds **3 codes** (**`Test Code`** — the active toolbar button for the captured annotation + **Theme** and **Identity** — visible but inactive in the toolbar) and a single transparent 256×256 image. In a real session you'll have a multi-code codebook drawn from your actual project's code tree and your imported image. The interaction model is identical regardless of how many codes or how big the image.
+> **Fixtures vs. real data:** the interaction model is identical regardless of how many codes or how big the image. In a real session you'll have a multi-code codebook drawn from your actual project's code tree and your imported image.
 
 (Note: the histogram collapsed on the canvas is intentional — the Konva Stage renders 256×256 by default; the actual image will be at its native intrinsic dims.)
 
@@ -131,11 +127,7 @@ Image coding is where LENS differs most from text-only QDA. The centre pane rend
 
 Default mode. Pick a code from the toolbar, then drag on the canvas.
 
-![bbox drag — picked code 'Test Code', mouse held at (40,40), drag mid-flight to (200,200)](assets/screenshots/02-bbox-dragging.png)
-
 When the mouse releases (with drag distance > `MIN_DRAG_PX = 4px`), the bbox commits via `image_selection_create` IPC:
-
-![bbox committed — outline at (40,40)-(200,200), code colour stroke, code-name label at top-left](assets/screenshots/03-bbox-committed.png)
 
 The chassis serialises the coords in **0..1 normalised form** at the IPC boundary so a `.qdpx` AreaReference round-trips with the same dimensions regardless of the underlying image's intrinsic pixel width.
 
@@ -152,17 +144,11 @@ Click the **Polygon** pill. The interaction model flips:
 | Right-click on empty canvas *or* press **Enter** | Commit polygon (≥3 vertices required; otherwise an error toast says "Polygons need at least 3 vertices") |
 | **Esc** | Cancel the in-flight draft |
 
-Mode toggle flips the visual state:
-
-![polygon mode selected — Rectangle/Polygon pill highlights Polygon, in-flight vertices cleared](assets/screenshots/04-polygon-mode-selected.png)
+Mode toggle flips the visual state.
 
 After picking a code and clicking three or four vertices on the canvas:
 
-![polygon in flight — 4 vertices placed, dashed preview line from last vertex to cursor under hover](assets/screenshots/05-polygon-inflight.png)
-
 Press Enter (or right-click on empty canvas):
-
-![polygon committed — closed closed=true Line with code colour stroke and 0.2-α fill, label at first vertex](assets/screenshots/06-polygon-committed.png)
 
 Validation rules (enforced **and** server-side):
 
@@ -174,8 +160,6 @@ Snap-to-close ring: when the cursor is within `SNAP_RADIUS_PX = 12` of vertex 0 
 ### Right-click action menu on a region/polygon
 
 Right-click a committed region/polygon stroke opens the action menu:
-
-![region action menu — Edit Memo… / Delete over a committed polygon](assets/screenshots/07-region-action-menu.png)
 
 - **Edit Memo…** opens a `RegionMemoDialog` that shares the same memo schema as text annotations (the `memos.linked_selection_id` column references the parent selection regardless of `selection_type`). Saving attaches a free-form body to the region; the region's code-name label gains a `•` bullet (memo-presence badge) once the body is non-empty.
 - **Delete** removes the selection + cascades the polygon / image_selection extension row.

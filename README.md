@@ -11,13 +11,10 @@
 
 LENS is a local-first, REFI-QDA-compatible research tool. Import documents (TXT, DOCX, PDF, PNG, JPG), build a hierarchical codebook with arbitrary nesting, annotate text passages and image regions, attach memos at every level, search with FTS5, and export to standards-compliant `.qdpx` / `.qdc` / CSV / HTML — all without ever leaving the desktop or sending data to a cloud.
 
-![Three-panel coding workspace screenshot — image-coder surface with committed polygon and code-side panel](docs/assets/screenshots/01-landing.png)
-
 ## Table of contents
 
 - [Why LENS](#why-lens)
 - [Features at a glance](#features-at-a-glance)
-- [Screenshots](#screenshots)
 - [Tech stack](#tech-stack)
 - [Prerequisites](#prerequisites)
 - [Quick start (5 minutes)](#quick-start-5-minutes)
@@ -56,22 +53,6 @@ The code is open-source under the MIT license, the install is a single `.deb` / 
 | **Collaboration lock** | On-open written `project.lock` file with the local user's display name and timestamp. Prevents simultaneous multi-device edit warning. Removed on close + on crash-recovery via `on_window_event(CloseRequested)`. |
 | **Python CLI companion** | `lens-qda` on PyPI via OIDC trusted-publishing. See [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) for `pip install lens-qda && lens-qda extract some.pdf --json`. |
 | **REFI-QDA import** | Open a `.qdpx` produced by NVivo / ATLAS.ti; codes, documents, and annotations import in their original hierarchy. |
-
-## Screenshots
-
-The image-coder surface is documented at length in [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md#image-coding). A tour of the captured states:
-
-| What | File |
-|---|---|
-| Image viewer at rest (toolbar + canvas, no project) | ![image viewer landing](docs/assets/screenshots/01-landing.png) |
-| Bbox region being drag-drawn | ![bbox mid-drag](docs/assets/screenshots/02-bbox-dragging.png) |
-| Bbox region committed (outline + colour-coded label) | ![bbox committed](docs/assets/screenshots/03-bbox-committed.png) |
-| Polygon mode selected (Rectangle/Polygon toggle pill) | ![polygon mode pill](docs/assets/screenshots/04-polygon-mode-selected.png) |
-| Polygon vertices in flight (dashed preview segment) | ![polygon in flight](docs/assets/screenshots/05-polygon-inflight.png) |
-| Polygon committed (fill at α 0.2 + code label) | ![polygon committed](docs/assets/screenshots/06-polygon-committed.png) |
-| Region action menu on right-click (Edit Memo… / Delete) | ![region action menu](docs/assets/screenshots/07-region-action-menu.png) |
-
-For prose annotations, codebook management, search dialog, project journal, and the export popover — see [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) which walks every surface with a screenshot-driven mini-tutorial.
 
 ## Tech stack
 
@@ -141,11 +122,10 @@ For a fully-illustrated walkthrough of what's next, see [docs/USER_GUIDE.md](doc
 │   ├── lens_qda/                 `extract` + `version` console-script entry
 │   └── tests/                    Pytest suite (in-memory fixtures)
 ├── tests/e2e/                    Playwright E2E suite + fixture (Konva image coding)
-├── scripts/                      Maintainer tooling (release SHA refresh, sidecar build, screenshots)
+├── scripts/                      Maintainer tooling (release SHA refresh, sidecar build)
 ├── docs/                         User-facing docs + research papers
-│   ├── USER_GUIDE.md             ★ Feature-by-feature user tutorial (with screenshots)
+│   ├── USER_GUIDE.md             ★ Feature-by-feature user tutorial
 │   ├── ARCHITECTURE.md           16-chapter system sourcebook
-│   ├── scope.md                  Functional scope document
 │   ├── onboarding-apple-developer.md   Apple signing/notarisation runbook
 │   └── research-papers/          19 design notes underpinning the implementation
 ├── .github/workflows/            CI: ci.yml (lint + test + Playwright E2E) + release.yml + release-dry-run.yml
@@ -184,7 +164,6 @@ For the deep dive, see [ARCHITECTURE.md](ARCHITECTURE.md).
 | `cd src-tauri && cargo test` | Rust unit + integration tests (`codes`, `closure_table`, `annotations`, `migration_05_relaxes_plain_text`, `lock_file_tests`, `image_selection_bbox_round_trip`, etc.) |
 | `npx playwright test` | Full E2E suite (https-server fixture on port 57599, see `tests/e2e/playwright.config.ts`) |
 | `bash scripts/build-sidecar.sh <target-triple>` | Rebuild the PyInstaller `pdfplumber` binary for the given triple |
-| `node scripts/lens-screenshots.mjs` | Recapture the 7 image-coder screenshots into `docs/assets/screenshots/`. Requires the fixture dev server running on 127.0.0.1:57599. |
 
 ## Testing
 
@@ -271,11 +250,9 @@ A `force-push` of an existing tag reuses the same wheel filename on PyPI — `py
 ### Release matrix stalled in `queued` for 1.5–2 hr
 
 This is almost always the **GitHub org-level third-party-action blocklist**
-on `https://github.com/organizations/mabo-du/settings/actions`. Lift
-instructions live in `.gh_admin_org_setup.md`. The `release.yml` `verify-publish`
-job added in v0.2.1 closes the structural publish loop once smoke passes;
-see [`.gh_admin_org_setup.md`](.gh_admin_org_setup.md) for the lift procedure
-+ `.github/workflows/release.yml` for the publish-gate.
+on `https://github.com/organizations/mabo-du/settings/actions`. The
+`release.yml` `verify-publish` job added in v0.2.1 closes the structural
+publish loop once smoke passes.
 
 ### `npx tauri dev` fails with "could not find crate `tauri-build`"
 
@@ -305,11 +282,10 @@ The Tesseract.js OCR worker (used by `DocumentList.tsx` if you've enabled image-
 
 Issues and patches welcome — `github.com/mabo-du/lens`. The commit template is `<scope>(<area>): <subject>`; the prose mirror (commit message body) explains why. PRs go through `npm test && cd src-tauri && cargo test && npx playwright test` and one maintainer review.
 
-When you change a UI surface, re-capture its screenshot:
+When you change a UI surface, re-run the Playwright E2E tests to verify:
 ```bash
-node scripts/lens-screenshots.mjs      # writes 7 PNGs to docs/assets/screenshots/
+npx playwright test
 ```
-…and PR the updated image along with the code. The diagrams in [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) are sourced from these PNGs verbatim.
 
 ## License
 
@@ -317,4 +293,4 @@ LENS is released under the [MIT License](LICENSE). The above is a summary; the `
 
 ---
 
-For the in-depth feature tutorial — codebook management, prose annotation, image coding with screenshots, memos, search, export, backup, and the collaboration lock — see **[`docs/USER_GUIDE.md`](docs/USER_GUIDE.md)**.
+For the in-depth feature tutorial — codebook management, prose annotation, image coding, memos, search, export, backup, and the collaboration lock — see **[`docs/USER_GUIDE.md`](docs/USER_GUIDE.md)**.

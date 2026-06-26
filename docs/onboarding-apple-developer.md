@@ -22,7 +22,7 @@
 > `gh secret list -R mabo-du/lens | wc -l` ≥ 7 (or count the
 > tauri-action-specific ones separately). Once all seven are present
 > AND the GitHub org-level third-party-action blocklist is lifted
-> (see `.gh_admin_org_setup.md` for that separate procedure), the
+> (see `org-blocklist lift procedure).
 > release.yml matrix emits a signed `.dmg` automatically.
 >
 > **Local-bypass for the v0.2.1 GA cut (when secrets are not yet

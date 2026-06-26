@@ -216,7 +216,7 @@ jobs:
       # Token scope note: `GITHUB_TOKEN` defaults to read-only for PR-from-fork
       # runs; tag-push runs inherit the workflow's perms which is why we
       # declare `contents: write` explicitly. If a future org policy zeroes
-      # the tag-push perm scope (cf. `.gh_admin_org_setup.md` §1), this job
+      # the tag-push perm scope , this job
       # will fail with 403 — cross-ref that runbook before debugging.
       contents: write
     steps:

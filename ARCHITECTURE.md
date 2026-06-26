@@ -783,10 +783,9 @@ in the 19 deep research papers that drove each choice.
 
 If you are reading this because a decision in this codebase surprised
 you, start with the chapter that owns that decision, then read the
-cited papers. If a decision now needs to be reversed, the
-`docs/scope.md` and `LENS_Implementation_Plan.md` files have additional
-context. The `lens-planning-only` / `lens-implementation` separation
-that I retrofitted mid-2026 means most of the decision history is
-recoverable, not lost.
+cited papers in `docs/research-papers/` for additional context. The
+`lens-planning-only` / `lens-implementation` separation that I
+retrofitted mid-2026 means most of the decision history is recoverable,
+not lost.
 
 Welcome to the project.
