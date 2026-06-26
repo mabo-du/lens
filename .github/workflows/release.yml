@@ -220,6 +220,17 @@ jobs:
       # will fail with 403 — cross-ref that runbook before debugging.
       contents: write
     steps:
+      # Review-C: explicit precondition so a missing-draft 404 surfaces as a
+      # clear ::error:: rather than as a confusing stderr line in the promote
+      # step. The ``if: success()`` outer guard covers the matrix-stalled case
+      # loudly (it skips this job), so this precondition is for the subtler
+      # partial-run / manual-dispatch case where the build succeeded WITHOUT
+      # tauri-action ever producing a release draft (org-blocklist scenario).
+      - name: Verify release draft exists (precondition)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release view "${{ github.ref_name }}" > /dev/null || { echo "::error::no draft release for ${{ github.ref_name }}"; exit 1; }
+
       - name: Promote draft release (no-op if already published)
         # When smoke was green on the Linux cell, tauri-action has attached
         # all 4 platform assets to a draft GitHub Release. This step
@@ -324,7 +335,7 @@ jobs:
           # wheel release with behaviour changes can't silently break the
           # publish gate, but a CDN purge or yanked exact-version won't brick
           # the install.
-          python -m pip install --quiet --upgrade 'build>=1.2,<2' 'twine>=5.1,<6' 'wheel>=0.43,<1'
+          python -m pip install --quiet --upgrade 'build>=1.2,<2' 'twine>=6,<7' 'wheel>=0.43,<1'
           python -m build
           echo "--- dist artefacts ---"
           ls -la dist
