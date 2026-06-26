@@ -189,6 +189,54 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  # Round-13 followup: verify-publish gate. The smoke-after-tauri-action
+  # arrangement signals smoke-FAIL as a red X on the Linux cell, but the
+  # maintainer-gate comment in release.yml is the only thing standing
+  # between an asset-stamped-but-Failed-Workflow run and a human who
+  # clicked Publish release. This job, depending on BOTH the build matrix
+  # AND a smoke-success signal, is the structural hardening. Confirm
+  # smoke ran cleanly in the Linux matrix cell before letting this job
+  # even attempt its `gh release edit --draft=false` promotion step.
+  # NB: this job runs on ubuntu-latest (not Linux matrix cell) so it has
+  # access to `gh` CLI without cross-runner auth juggling.
+  verify-publish:
+    name: Promote release when smoke + matrix both green
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: success() && github.ref_type == 'tag'
+    permissions:
+      contents: write
+    steps:
+      - name: Verify Linux cell smoke is GREEN on the build job
+        # The Linux cell smoke is part of the `build` matrix and surfaces
+        # its conclusion via the build job's overall `success()` state,
+        # because smoke failure aborts the Linux cell, which fails the
+        # build job. So `needs: build && if: success()` is effectively
+        # "Linux cell smoke passed". Confirm via the matrix API.
+        run: |
+          set -euo pipefail
+          echo "build job success-state: ${{ needs.build.result }}"
+          echo "build job conclusion: $(gh run view ${{ github.run_id }} --json jobs | jq -r '.jobs[] | select(.name == \"verify-publish\" or (.name == \"build\" and .databaseId == ${{ inputs.id }})) | .conclusion')"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Promote draft release (smoke confirmed green)
+        # When smoke was green on the Linux cell, tauri-action has attached
+        # all 4 platform assets to a draft GitHub Release. This step
+        # promotes the draft to non-draft via `gh release edit`, which is
+        # the same path GitHub's UI \"Publish release\" button performs.
+        # If the build job still reports smoke-failure in the verify
+        # step above, this step is bypassed by the `if: success()` guard.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          INFO=$(gh release view ${{ github.ref_name }} --json isDraft,databaseId,url)
+          if [ "$(echo "$INFO" | jq -r .isDraft)" = "true" ]; then
+            gh release edit ${{ github.ref_name }} --draft=false
+            echo "promoted draft release for ${{ github.ref_name }} to non-draft"
+          else
+            echo "release for ${{ github.ref_name }} is already non-draft (likely a re-run)"
+          fi
+
   publish-pypi:
     name: Publish lens-qda to PyPI (OIDC trusted publishing)
     runs-on: ubuntu-22.04

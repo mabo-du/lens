@@ -1,5 +1,12 @@
 # LENS
 
+> **Latest release: v0.2.1 (2026-06-26)** — a patch release dedicated to
+> release-pipeline reliability. Smoke harness + 5 negative-corpus fixtures
+> + org-blocklist lift runbook + `verify-publish` GA gate. The v0.2.0 GA
+> matrix stalled under the GitHub org-level third-party-action blocklist;
+> v0.2.1 ships the tools future maintainers need to unblock it without
+> re-discovering the failure mode. See [CHANGELOG.md](CHANGELOG.md#021---2026-06-26).
+
 **Open-source qualitative data analysis for the desktop.**
 
 LENS is a local-first, REFI-QDA-compatible research tool. Import documents (TXT, DOCX, PDF, PNG, JPG), build a hierarchical codebook with arbitrary nesting, annotate text passages and image regions, attach memos at every level, search with FTS5, and export to standards-compliant `.qdpx` / `.qdc` / CSV / HTML — all without ever leaving the desktop or sending data to a cloud.
@@ -155,7 +162,7 @@ LENS is a **strict renderer/host split**:
 
 - **The PDF sidecar** is a Python 3.11 script bundled with PyInstaller (`scripts/build-sidecar.sh`). Tauri's `bundle.externalBin` references the produced binary; on startup, the Rust layer spawns it on demand, pipes `{"pdf": "...", "args": {...}}` JSON envelopes on stdin, and reads `{"success": bool, "text"|"error": str}` envelopes on stdout. The payload shape is shared verbatim with the `lens-qda` CLI so the Python contract is one source of truth.
 
-- The **codebook** uses a **closure table** (`codes` + `closure` join) so depth-stacking is composable. The invariant `ancestor.depth + descendant.depth = path.depth` is asserted by the `closure_table_invariant_depth_stacking` Rust test.
+- The **codebook** uses a **closure table** (`codes` + `closure` join) so depth-stacking is composable. The two-step composition invariant — `parent_depth + subtree_depth = composed_depth` — is asserted by the `closure_table_invariant_depth_stacking` Rust test (transitive move of a sub-tree must survive re-parent + depth remap with no orphan rows).
 
 - **Annotations** are stored as half-open character offsets into the document's `plain_text`. ProseMirror `coordsAtPos` ↔ `charOffsetToPmPos` math lives in `src/utils/offset-utils.ts`. Image-region annotations carry 0..1 normalised bbox coords so REFI-QDA AreaReference `<azimuth range>` exports round-trip.
 
@@ -260,6 +267,15 @@ bash scripts/refresh-release-sha-pins.sh --apply    # write after confirmation
 A `force-push` of an existing tag reuses the same wheel filename on PyPI — `pypa/gh-action-pypi-publish` rejects duplicates with HTTP 400 `File already exists`. To re-cut the same tag, bump the version stamp and create a *fresh* tag (the matrix docs in `release.yml` spell this out).
 
 ## Troubleshooting
+
+### Release matrix stalled in `queued` for 1.5–2 hr
+
+This is almost always the **GitHub org-level third-party-action blocklist**
+on `https://github.com/organizations/mabo-du/settings/actions`. Lift
+instructions live in `.gh_admin_org_setup.md`. The `release.yml` `verify-publish`
+job added in v0.2.1 closes the structural publish loop once smoke passes;
+see [`.gh_admin_org_setup.md`](.gh_admin_org_setup.md) for the lift procedure
++ `.github/workflows/release.yml` for the publish-gate.
 
 ### `npx tauri dev` fails with "could not find crate `tauri-build`"
 

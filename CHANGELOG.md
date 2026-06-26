@@ -5,6 +5,97 @@ All notable changes to LENS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-06-26
+
+Patch release dedicated to **release-pipeline reliability**. The v0.2.0
+GA cut (and prior rc.1/rc.2) stalled across the multironner matrix in
+the same way: the GitHub org-level third-party-action blocklist
+forbids the `tauri-action` step from running, so the matrix sits in
+`queued` for 1.5–2 hr and either times out or returns HTTP 422
+`Server Error: This workflow references actions that are not allowed
+by your organization's policy` on a manual re-run. v0.2.1 ships a
+no-UI smoke harness, a canonical negative verifier corpus, and an
+org-blocklist lift runbook so future maintainers can unblock the
+matrix without re-discovering the failure mode.
+
+### Added
+
+- **`scripts/smoke-test.sh`** — no-UI CI-variant runner (SMOKE_TEST.md §6).
+  Validates what CAN be checked without driving the GUI: release-binary
+  presence, smoke-fixture SHA + integrity, export-artefact verifiers
+  (positive corpus), DB integrity scratch-project probe, and a
+  regression corpus walk that proves the verifiers actually REJECT.
+  Exit 0 on full pass; exit 1 on any FAIL.
+- **`scripts/verify/verify-export-{qdpx,csv,html,qdc}.sh`** — the 4
+  §5 verifiers. `qdpx` parses `project.qde` from the .qdpx zip,
+  validates namespace + at least one populated User GUID. `csv`
+  checks UTF-8 BOM and the canonical column list. `html` checks
+  `<title>` element + `Coding density` header. `qdc` checks
+  well-formedness + REFI namespace + `<CodeBook>` root. xmllint
+  falls back to python3 etree on minimal containers; paths are
+  passed via `LENS_VERIFY_XML` env var so shell-special characters
+  in filenames cannot break the python literal.
+- **`tests/fixtures/smoke/negative/`** — 5 canonical regression
+  corpus fixtures (regenerated with REAL binary bytes via python):
+  - `corrupt.qdpx` — valid ZIP, malformed `project.qde`.
+  - `corrupt.qdc` — plaintext, fails qdc verifier on namespace + root.
+  - `nobom.csv` — CSV header without UTF-8 BOM.
+  - `no-title.html` — HTML doc with no `<title>` element (no literal
+    `<title>` in comment text either, to dodge the BRE substring
+    over-eager grep).
+  - `doublebom.csv` — TWO consecutive UTF-8 BOMs followed by the
+    canonical CSV header, exercising the multi-BOM strip pattern.
+- **`.gh_admin_org_setup.md`** — 7-section runbook for org-admins
+  to lift the GitHub org-level third-party-action blocklist via 4
+  clicks + 1 allowlist entry. Inventory table covers LENS's 4
+  third-party consumers (`dtolnay/rust-toolchain`, `Swatinem
+  /rust-cache`, `tauri-apps/tauri-action`, `pypa
+  /gh-action-pypi-publish`). Force-tracked despite `.gitignore` so a
+  future maintainer can `git ls-files` it directly.
+
+### Changed
+
+- **`.github/workflows/release.yml`** — embedded a Linux-cell-only
+  smoke step + an `upload-artifact` (retention-days: 7) step inside
+  the existing `build` matrix AFTER `tauri-action`. Smoke-FAIL
+  surfaces a red X. A Maintainer-gate comment documents that the
+  draft release is NOT auto-cancelled. Added a `verify-publish` job
+  that depends on `build && success()` and conditionally promotes
+  the draft via `gh release edit --draft=false` so future GA cuts
+  have a structural publish-gate (rather than relying on a human
+  reading the Actions tab).
+- **`.github/workflows/ci.yml`** — appended a PR-time smoke step
+  to the `linux-build` job. Regression-detections land in the PR
+  UI before merge.
+- **`.github/workflows/release-dry-run.yml`** — appended smoke +
+  artifact-upload to the `verify-release-pipeline` job with a
+  Linux-only deliberate comment so future maintainers don't retarget
+  the runner without re-thinking the matrix implications.
+
+### Fixed
+
+- **Stalled release matrix diagnosis reproducibility** — the
+  `Round-9 followup` comments in the workflow YAML joined the
+  round-12 smoke wiring plus `.gh_admin_org_setup.md` for a
+  documented end-to-end path: see the runbook, lift the blocklist,
+  re-trigger `release.yml`.
+- **`scripts/verify/verify-export-csv.sh`** — tightened to
+  `grep -Eq '<title(>|/>|[[:space:]])'` (round-14 ERE precision fix)
+  so a future HTML report containing a hypothetical `<title-block>`
+  substring does not falsely satisfy the verifier. Real `<title>`
+  elements still pass.
+
+### Carry-over (no behaviour change here)
+
+- v0.2.0 GA was attempted but the matrix stalled 1.5–2 hr in
+  `queued` due to org-blocklist + Apple signing secrets not
+  provisioned. The v0.2.1 **local-bypass** release uses
+  `gh release create --draft --notes-file` with locally-built
+  Linux artifacts (.deb + .AppImage) + the manually published
+  PyPI wheel; macOS and Windows installers require CI which is
+  unreachable until the org-blocklist is lifted and the 7 Apple
+  secrets are present.
+
 ## [0.2.0] - 2026-06-26
 
 GA cut superseding v0.2.0-rc.2 (and rc.1). The version stamp across

@@ -53,8 +53,14 @@ Cargo.lock
 .commitmsg*
 .commit_*.txt
 
-# GitHub admin notes (one-off setup docs)
+# GitHub admin notes — one-off setup doc that is DELIBERATELY force-tracked.
+# `.gh_admin_org_setup.md` is the org-blocklist lift procedure that future
+# maintainers need BEFORE they can unblock the v0.2.x release matrix. The
+# negation below carves it back in so `git ls-files` finds it. Do not
+# re-ignore without updating `.gh_admin_org_setup.md` cross-refs
+# (README, USER_GUIDE, CHANGELOG).
 .gh_admin_org_setup.md
+!.gh_admin_org_setup.md
 
 # Charter analysis artefacts
 charter-report.json
