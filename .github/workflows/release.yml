@@ -27,16 +27,10 @@ jobs:
             # hits GitHub API rate limits while fetching WiX releases.
             bundles: 'nsis'
           # Round-8 fix (PyInstaller is host-only): pin the runner to
-          # match the target triple (macos-13 = Intel x86_64 host,
-          # macos-14 = Apple Silicon host). Previously ``macos-latest''
-          # (Apple Silicon since Apr 2024) was used for BOTH matrix
-          # entries, so the PyInstaller binary was always Apple-
-          # Silicon even when named ``x86_64-apple-darwin`` -> crashes
-          # or fails the bundle when launched on Intel macOS hardware.
-          - platform: macos-13
-            target: x86_64-apple-darwin
-            ext: ''
-            bundles: 'app,dmg'
+          # match the target triple. Note: GitHub removed free Intel
+          # macOS runners (macos-13 deprecated). Only Apple Silicon
+          # (arm64) builds are available on free-tier runners.
+          # x86_64 users can run arm64 binaries via Rosetta 2.
           - platform: macos-14
             target: aarch64-apple-darwin
             ext: ''
