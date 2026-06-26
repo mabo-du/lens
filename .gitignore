@@ -108,3 +108,5 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 .python-venv/
+# modern PEP 660 editable-install pattern (setuptools >=64)
+__editable__/
