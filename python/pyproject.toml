@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lens-qda"
-version = "0.0.0"  # dynamically rewritten in .github/workflows/release.yml from $GITHUB_REF_NAME
+version = "0.2.1"  # dynamically rewritten in .github/workflows/release.yml from $GITHUB_REF_NAME
 description = "Python utilities for LENS, a local-first qualitative data analysis (QDA) tool."
 # `file = …` reads the FILE CONTENTS as the project long description; `text = …`
 # would set the literal 9-character string "README.md" (a footgun). PyPI will
@@ -57,6 +57,17 @@ dependencies = [
 
 [project.scripts]
 lens-qda = "lens_qda.cli:main"
+
+[project.optional-dependencies]
+# Test-only dependencies. ``pip install -e .[test]`` installs the suite
+# used by the `python-tests` job in .github/workflows/ci.yml.
+# `reportlab` is a build-time test fixture generator (see pytest's
+# `fixture_pdf` fixture); it is NOT a runtime dependency of the lens-qda
+# package itself.
+test = [
+    "pytest>=8,<9",
+    "reportlab>=4,<5",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]

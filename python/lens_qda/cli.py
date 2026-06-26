@@ -82,13 +82,20 @@ def extract_json(
 
 
 def _emit(text: str, output: Optional[Path]) -> None:
+    # Round-7 fix: terminate BOTH stdout and file paths with a single newline so
+    # ``lens-qda version -o foo.txt`` and ``lens-qda version`` produce the same
+    # byte sequence (sans the stdout/stderr fds). Without this, downstream
+    # tools that concatenate files (or tests that ``assert … endswith("\n")``,
+    # e.g. test_cli_version_to_file_writes_string) trip on inconsistent
+    # trailing-whitespace contracts.
     if output is None:
         sys.stdout.write(text)
         if not text.endswith("\n"):
             sys.stdout.write("\n")
         return
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(text, encoding="utf-8")
+    payload = text if text.endswith("\n") else text + "\n"
+    output.write_text(payload, encoding="utf-8")
 
 
 def _emit_envelope(envelope: dict[str, object], output: Optional[Path]) -> None:

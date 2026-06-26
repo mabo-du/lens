@@ -1,1 +1,5 @@
 pdfplumber==0.11.4
+
+[test]
+pytest<9,>=8
+reportlab<5,>=4

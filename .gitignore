@@ -99,3 +99,12 @@ test-results/
 
 # Playwright MCP server ephemeral state (used outside CI during dev).
 .playwright-mcp/
+
+# Python build + test artifacts (added at v0.2.1 to keep python/tests/ tracked while ignoring pyc + caches)
+__pycache__/
+*.pyc
+*.pyo
+.python-version
+.pytest_cache/
+*.egg-info/
+.python-venv/

@@ -9,3 +9,4 @@ lens_qda.egg-info/dependency_links.txt
 lens_qda.egg-info/entry_points.txt
 lens_qda.egg-info/requires.txt
 lens_qda.egg-info/top_level.txt
+tests/test_cli.py
