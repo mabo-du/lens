@@ -367,6 +367,7 @@ mod tests {
     /// `init_db` rejects an empty passphrase explicitly so the user gets
     /// a meaningful error rather than SQLCipher accepting `PRAGMA key = ''`
     /// and silently producing an unreadable database.
+    #[cfg(feature = "sqlcipher")]
     #[tokio::test]
     async fn init_db_with_empty_passphrase_is_rejected() {
         let dir = tempdir().expect("Failed to create temp dir");

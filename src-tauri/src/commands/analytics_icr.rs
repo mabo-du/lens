@@ -73,9 +73,7 @@ pub fn spans_to_binary(spans: &[(usize, usize)], doc_len: usize) -> Vec<u8> {
     for &(start, end) in &sorted {
         cursor = cursor.max(start);
         if cursor < end {
-            for i in cursor..end {
-                out[i] = 1;
-            }
+            out[cursor..end].fill(1);
             cursor = end;
         }
     }
@@ -298,7 +296,7 @@ pub async fn analytics_icr_matrix_internal(
         std::collections::HashSet<String>,
     > = std::collections::HashMap::new();
 
-    for ((coder, code_id, doc_id), _spans) in &groups {
+    for (coder, code_id, doc_id) in groups.keys() {
         code_doc_pairs.insert((code_id.clone(), doc_id.clone()));
         coders_for_pair
             .entry((code_id.clone(), doc_id.clone()))

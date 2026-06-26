@@ -1,0 +1,13 @@
+2026-06-24T10:19:42.6121581Z [2026-06-24T10:19:42.611Z] [lens-e2e] (1/2) vite build — fixture compile + React/Konva bundle start
+2026-06-24T10:19:43.1050501Z [36mvite v7.3.5 [32mbuilding client environment for production...[36m[39m
+2026-06-24T10:19:43.1610762Z transforming...
+2026-06-24T10:19:43.1902870Z [32m✓[39m 3 modules transformed.
+2026-06-24T10:19:43.1919803Z [31m✗[39m Build failed in 63ms
+2026-06-24T10:19:43.1920685Z [31merror during build:
+2026-06-24T10:19:43.1922887Z [31mCould not resolve "../../../src/components/editor/ImageViewer" from "tests/e2e/fixture/src/main.tsx"[31m
+2026-06-24T10:19:43.1924423Z file: [36m/home/runner/work/lens/lens/tests/e2e/fixture/src/main.tsx[31m
+2026-06-24T10:19:43.1925758Z     at getRollupError (file:///home/runner/work/lens/lens/node_modules/rollup/dist/es/shared/parseAst.js:317:41)
+2026-06-24T10:19:43.1927202Z     at error (file:///home/runner/work/lens/lens/node_modules/rollup/dist/es/shared/parseAst.js:313:42)
+2026-06-24T10:19:43.1929151Z     at ModuleLoader.handleInvalidResolvedId (file:///home/runner/work/lens/lens/node_modules/rollup/dist/es/shared/node-entry.js:22144:24)
+2026-06-24T10:19:43.1931583Z     at file:///home/runner/work/lens/lens/node_modules/rollup/dist/es/shared/node-entry.js:22104:26[39m
+2026-06-24T10:19:43.2045823Z [2026-06-24T10:19:43.204Z] [lens-e2e] vite build exited with code=1
