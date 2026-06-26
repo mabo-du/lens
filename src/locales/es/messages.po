@@ -1,0 +1,133 @@
+msgid ""
+msgstr ""
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+
+#. js-lingui-explicit-id
+msgid "app.title"
+msgstr "LENS"
+
+#. js-lingui-explicit-id
+msgid "app.tagline"
+msgstr "Análisis Cualitativo de Datos"
+
+#. js-lingui-explicit-id
+msgid "project.new"
+msgstr "Nuevo proyecto"
+
+#. js-lingui-explicit-id
+msgid "project.open"
+msgstr "Abrir proyecto"
+
+#. js-lingui-explicit-id
+msgid "project.sample"
+msgstr "Proyecto de muestra"
+
+#. js-lingui-explicit-id
+msgid "project.close"
+msgstr "Cerrar"
+
+#. js-lingui-explicit-id
+msgid "workspace.codes"
+msgstr "Códigos"
+
+#. js-lingui-explicit-id
+msgid "workspace.documents"
+msgstr "Documentos"
+
+#. js-lingui-explicit-id
+msgid "workspace.import"
+msgstr "Importar"
+
+#. js-lingui-explicit-id
+msgid "code.new"
+msgstr "Nuevo código"
+
+#. js-lingui-explicit-id
+msgid "code.save"
+msgstr "Guardar código"
+
+#. js-lingui-explicit-id
+msgid "code.cancel"
+msgstr "Cancelar"
+
+#. js-lingui-explicit-id
+msgid "code.name"
+msgstr "Nombre"
+
+#. js-lingui-explicit-id
+msgid "code.color"
+msgstr "Color"
+
+#. js-lingui-explicit-id
+msgid "code.parent"
+msgstr "Código padre"
+
+#. js-lingui-explicit-id
+msgid "code.description"
+msgstr "Descripción"
+
+#. js-lingui-explicit-id
+msgid "code.empty"
+msgstr "Aún no hay códigos."
+
+#. js-lingui-explicit-id
+msgid "document.empty"
+msgstr "Aún no se han importado documentos."
+
+#. js-lingui-explicit-id
+msgid "document.delete.confirm"
+msgstr "¿Eliminar \"{title}\"? Esto también eliminará todas las anotaciones asociadas."
+
+#. js-lingui-explicit-id
+msgid "search.placeholder"
+msgstr "Buscar en documentos y memos..."
+
+#. js-lingui-explicit-id
+msgid "search.empty"
+msgstr "Escribe para buscar en todos tus documentos y memos..."
+
+#. js-lingui-explicit-id
+msgid "search.noResults"
+msgstr "Sin resultados para \"{query}\""
+
+#. js-lingui-explicit-id
+msgid "search.group.documents"
+msgstr "Documentos"
+
+#. js-lingui-explicit-id
+msgid "search.group.memos"
+msgstr "Memos"
+
+#. js-lingui-explicit-id
+msgid "settings.title"
+msgstr "Ajustes"
+
+#. js-lingui-explicit-id
+msgid "settings.displayName"
+msgstr "Nombre para mostrar"
+
+#. js-lingui-explicit-id
+msgid "settings.theme"
+msgstr "Tema"
+
+#. js-lingui-explicit-id
+msgid "settings.theme.light"
+msgstr "Claro"
+
+#. js-lingui-explicit-id
+msgid "settings.theme.dark"
+msgstr "Oscuro"
+
+#. js-lingui-explicit-id
+msgid "settings.theme.system"
+msgstr "Sistema"
+
+#. js-lingui-explicit-id
+msgid "settings.defaultCodeColor"
+msgstr "Color de código por defecto"
+
+#. js-lingui-explicit-id
+msgid "annotation.assign"
+msgstr "Asignar código…"
