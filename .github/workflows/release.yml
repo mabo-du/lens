@@ -178,6 +178,9 @@ jobs:
         # The red ✗ on this cell is the gate; the draft is the data.
 
       - name: Upload smoke artefacts (Linux cell)
+        # always() so on-call can read WHY smoke failed even when this
+        # cell exits red; combined with if-no-files-found: ignore so a
+        # pre-smoke green-cell does not punt on empty artefacts either.
         if: matrix.platform == 'ubuntu-22.04' && always()
         uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:
@@ -202,40 +205,31 @@ jobs:
   verify-publish:
     name: Promote release when smoke + matrix both green
     runs-on: ubuntu-latest
+    # depends on the build matrix so a Linux-cell smoke-FAIL routes here
+    # as a failed dependency. The outer `if: success()` is therefore the
+    # sole structural gate; round-17 review flagged Step 1's redundant
+    # `gh run view` query + brittle job-name jq filter, so we collapsed
+    # to the idempotent promotion as a single step.
     needs: [build]
     if: success() && github.ref_type == 'tag'
     permissions:
+      # Token scope note: `GITHUB_TOKEN` defaults to read-only for PR-from-fork
+      # runs; tag-push runs inherit the workflow's perms which is why we
+      # declare `contents: write` explicitly. If a future org policy zeroes
+      # the tag-push perm scope (cf. `.gh_admin_org_setup.md` §1), this job
+      # will fail with 403 — cross-ref that runbook before debugging.
       contents: write
     steps:
-      - name: Verify Linux cell smoke is GREEN on the build job
-        # The Linux cell smoke is part of the `build` matrix and surfaces
-        # its conclusion via the build job's overall `success()` state,
-        # because smoke failure aborts the Linux cell, which fails the
-        # build job. So `needs: build && if: success()` is effectively
-        # "Linux cell smoke passed". Confirm via the matrix API.
-        run: |
-          set -euo pipefail
-          echo "build job success-state: ${{ needs.build.result }}"
-          echo "build job conclusion: $(gh run view ${{ github.run_id }} --json jobs | jq -r '.jobs[] | select(.name == \"verify-publish\" or (.name == \"build\" and .databaseId == ${{ inputs.id }})) | .conclusion')"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Promote draft release (smoke confirmed green)
+      - name: Promote draft release (no-op if already published)
         # When smoke was green on the Linux cell, tauri-action has attached
         # all 4 platform assets to a draft GitHub Release. This step
-        # promotes the draft to non-draft via `gh release edit`, which is
-        # the same path GitHub's UI \"Publish release\" button performs.
-        # If the build job still reports smoke-failure in the verify
-        # step above, this step is bypassed by the `if: success()` guard.
+        # promotes the draft to non-draft via `gh release edit --draft=false`,
+        # which is the same effect as clicking the green Publish-release
+        # button in the GitHub Releases web UI. gh release edit is idempotent
+        # on a non-draft release (no-op + a friendly message).
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          INFO=$(gh release view ${{ github.ref_name }} --json isDraft,databaseId,url)
-          if [ "$(echo "$INFO" | jq -r .isDraft)" = "true" ]; then
-            gh release edit ${{ github.ref_name }} --draft=false
-            echo "promoted draft release for ${{ github.ref_name }} to non-draft"
-          else
-            echo "release for ${{ github.ref_name }} is already non-draft (likely a re-run)"
-          fi
+        run: gh release edit "${{ github.ref_name }}" --draft=false
 
   publish-pypi:
     name: Publish lens-qda to PyPI (OIDC trusted publishing)

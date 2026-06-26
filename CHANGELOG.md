@@ -96,6 +96,20 @@ matrix without re-discovering the failure mode.
   unreachable until the org-blocklist is lifted and the 7 Apple
   secrets are present.
 
+  **Deferred to v0.2.1-followup:** macOS `.dmg` (signed + notarised)
+  and Windows `.exe` (nsis). Both require the seven-secrets
+  provisioning documented in `docs/onboarding-apple-developer.md`
+  §STOP plus the GitHub org-level third-party-action blocklist
+  lift in `.gh_admin_org_setup.md`. The v0.2.1 release as currently
+  cut ships **Linux `.deb` + `.AppImage` via local-bypass** only
+  (`gh release create --draft` from a Linux builder with the
+  pdfplumber sidecar compiled in). Once the secrets + blocklist
+  are honest-released, v0.2.1-followup re-runs `release.yml` and
+  appends the macOS/Windows assets to the existing release via
+  `gh release upload`. Without this explicit statement in the
+  release notes, users installing on macOS/Windows will see "no
+  asset for your platform" with no narrative to the cause.
+
 ## [0.2.0] - 2026-06-26
 
 GA cut superseding v0.2.0-rc.2 (and rc.1). The version stamp across

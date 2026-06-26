@@ -321,6 +321,21 @@ If you want to use the same script from a non-PDF corpus, `lens-qda extract` acc
 
 > _Note: numbered 18 in the table of contents above; heading slugified to `troubleshooting` so external links (e.g. `README.md` → `docs/USER_GUIDE.md#troubleshooting`) keep resolving._
 
+### Smoke harness for the LENS release pipeline
+
+Every `release.yml` matrix run (Linux/Windows/macOS) executes
+`bash scripts/smoke-test.sh` from the Ubuntu-22.04 cell. The runner
+verifies the freshly-built `lens` binary, walks 5 intentionally-
+broken/edge fixtures through the `scripts/verify/verify-export-*.sh`
+corpus, and exits 0 if the verifiers actually REJECT bad inputs (no
+regressed-to-no-op acceptable). Smoke-FAIL surfaces as a red X on
+the matrix cell; the `verify-publish` job downstream implicitly
+gates the GH Release draft promotion. To run locally:
+
+```bash
+bash scripts/smoke-test.sh
+```
+
 ### Image viewer canvas blank?
 
 If the canvas renders empty on a `.png` / `.jpg` document, the asset request IPC (`document_get_asset_base64`) may have failed. Check:
