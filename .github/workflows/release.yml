@@ -223,6 +223,35 @@ jobs:
       # will fail with 403 — cross-ref that runbook before debugging.
       contents: write
     steps:
+      # v0.2.4-followup: checkout CHANGELOG.md so we can extract release
+      # notes (and so `gh` CLI no longer needs cwd git-inference --
+      # see the Verify-draft step comment below for the original bug).
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.0
+
+      # v0.2.4-followup: extract the matching `## [<VERSION>]` section
+      # from CHANGELOG.md so the repo's curated release notes ride along
+      # with the `gh release edit --draft=false` step. awk range pattern
+      # from start-marker until the next `## [` line (or EOF). PEP 440
+      # note: tag `v0.2.0-rc.1` matches CHANGELOG's literal
+      # `## [0.2.0-rc.1]` directly (workflow uses dotted-suffix form,
+      # not the rc1 shortened form, so this lookup is one-to-one).
+      - name: Extract release notes from CHANGELOG
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Extracting CHANGELOG notes for ${VERSION} from tag ${GITHUB_REF_NAME}..."
+          awk -v ver="^## \\\\[${VERSION}\\\\]" '
+            $0 ~ ver {flag=1; next}
+            flag && /^## \[/ {exit}
+            flag
+          ' CHANGELOG.md > /tmp/lens-release-notes.md
+          if [ -s /tmp/lens-release-notes.md ]; then
+            echo "extracted $(wc -l < /tmp/lens-release-notes.md) lines ($(wc -c < /tmp/lens-release-notes.md) bytes)"
+          else
+            echo "WARN: no CHANGELOG section found for ${VERSION}; falling back to short placeholder"
+            echo "INFO: add a CHANGELOG entry for ${VERSION} before tagging so future releases ship with curated notes."
+            echo "LENS ${VERSION} release. See the assets attached." > /tmp/lens-release-notes.md
+          fi
+
       # Review-C: explicit precondition so a missing-draft 404 surfaces as a
       # clear ::error:: rather than as a confusing stderr line in the promote
       # step. The ``if: success()`` outer guard covers the matrix-stalled case
@@ -273,17 +302,26 @@ jobs:
           cat "$RELVIEW_LOG" >&2
           exit 1
 
-      - name: Promote draft release (no-op if already published)
+      - name: Promote draft release (no-op if already published, attach CHANGELOG notes)
         # When smoke was green on the Linux cell, tauri-action has attached
         # all 4 platform assets to a draft GitHub Release. This step
         # promotes the draft to non-draft via `gh release edit --draft=false`,
         # which is the same effect as clicking the green Publish-release
         # button in the GitHub Releases web UI. gh release edit is idempotent
-        # on a non-draft release (no-op + a friendly message). Same
-        # v0.2.3-followup --repo fix as the precondition step above.
+        # on a non-draft release (no-op + a friendly message). The
+        # v0.2.3-followup --repo fix and the v0.2.4-followup
+        # --notes-file attachment (uses the CHANGELOG section extracted
+        # above) combine so the published release page ships with the
+        # curated notes from CHANGELOG.md, not the tauri-action
+        # placeholder `See the assets...`.
+
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit "${{ github.ref_name }}" --draft=false --repo "${{ github.repository }}"
+        run: |
+          gh release edit "${{ github.ref_name }}" \
+            --draft=false \
+            --notes-file /tmp/lens-release-notes.md \
+            --repo "${{ github.repository }}"
 
   publish-pypi:
     name: Publish lens-qda to PyPI (OIDC trusted publishing)
