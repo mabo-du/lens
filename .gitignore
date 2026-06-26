@@ -12,9 +12,8 @@ dist
 dist-ssr
 *.local
 
-# Editor directories and files
+# Editor directories and files (none published — these are local tooling)
 .vscode/*
-!.vscode/extensions.json
 .idea
 .DS_Store
 *.suo
@@ -23,15 +22,12 @@ dist-ssr
 *.sln
 *.sw?
 
-# Agent and tooling artifacts
-# Note: .claude/skills/ is now gitignored — these are peer-published
-# tooling configs, kept locally but not in the public repo.
+# Agent and tooling artifacts (none published — local tooling only)
 *.charter-session
 .charter/
 .agents/
 .beads/
 .claude/*
-!.claude/settings.json
 .claude/local/
 .ctx/
 .gitnexus/
