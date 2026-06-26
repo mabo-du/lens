@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeDocsCoded } from './StatusBar';
+import { computeDocsCoded } from './statusBarLogic';
 import type { DocumentRecord } from '@/ipc/documents';
 import type { AnnotationRecord } from '@/ipc/annotations';
 

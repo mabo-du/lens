@@ -17,8 +17,16 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import WaveSurfer from 'wavesurfer.js';
-// wavesurfer.js@7.12: regions plugin lives under dist/plugins/
-import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.esm.js';
+// v0.2.3 followup: switch to the canonical public-dist alias
+// `wavesurfer.js/plugins/regions`. The previous hardcoded
+// `dist/plugins/regions.esm.js` path is internal — it's the plugin
+// entry ON DISK, not the package.json-`exports`-declared alias.
+// `wavesurfer.js/plugins/regions` resolves to the same ESM file via
+// the `./plugins/*` mapping in wavesurfer.js's `exports`, so
+// consumers like bundler fingerprinting and tree-shaking stay
+// stable across wavesurfer point releases (an ESM wholesale re-pack
+// would not change this path even if the dist layout shifted).
+import RegionsPlugin from 'wavesurfer.js/plugins/regions';
 import { Activity } from 'lucide-react';
 
 export interface AudioWaveformProps {

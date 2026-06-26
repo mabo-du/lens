@@ -164,6 +164,15 @@ jobs:
       - name: Run no-UI smoke test (Linux cell)
         if: matrix.platform == 'ubuntu-22.04'
         shell: bash
+        # v0.2.3 followup: pass TARGET triple into the smoke step so the
+        # Step 0.1 binary-presence check finds the file tauri-action wrote
+        # at `src-tauri/target/<TARGET>/release/lens`. Without this the
+        # smoke step red-X'd on the v0.2.2 release because ${{ matrix.target }}
+        # and the smoke step's hardcoded `src-tauri/target/release/lens`
+        # path diverged (matrix-built under target/release/lens-subdir).
+        env:
+          TARGET: ${{ matrix.target }}
+          LENS_SMOKE_TARGET: ${{ matrix.target }}
         run: bash scripts/smoke-test.sh
         # Round-13: this smoke failure does NOT auto-cancel the draft
         # release (tauri-action already created the draft with assets).
@@ -268,8 +277,15 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           echo "Publishing lens-qda==${VERSION} from tag ${GITHUB_REF_NAME}"
-          sed -i "s/^version = \"0\.0\.0\"/version = \"${VERSION}\"/" python/pyproject.toml
-          sed -i "s/__version__ = \"0\.0\.0\"/__version__ = \"${VERSION}\"/" python/lens_qda/__init__.py
+          # v0.2.3 followup: the prior `0\.0\.0` regex stopped matching when
+          # pyproject.toml was bumped to 0.2.1 in the v0.2.1 round, so the
+          # PyPI publish step on the v0.2.2 tag produced `lens_qda-0.2.1-*.whl`
+          # (which already exists on PyPI from the v0.2.1 release) — HTTP 400
+          # "File already exists" from upload.pypi.org. Using `.*` matches the
+          # current stamp regardless of prior version value, so bumping
+          # forward works without manually maintaining a sed regex per-tag.
+          sed -i "s/^version = \".*\"/version = \"${VERSION}\"/" python/pyproject.toml
+          sed -i "s/^__version__ = \".*\"/__version__ = \"${VERSION}\"/" python/lens_qda/__init__.py
           echo "--- patched pyproject.toml version line ---"
           grep '^version' python/pyproject.toml
           echo "--- patched __init__.py version line ---"

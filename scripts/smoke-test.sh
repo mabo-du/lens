@@ -32,8 +32,20 @@ FAIL=0
 # downgrade $BUNDLE_DIR to a soft WARN — the binary IS the contract; the
 # installer artifacts are nice-to-have.
 echo '== [1] release binary present (Step 0.1 prerequisite) =='
-BIN="src-tauri/target/release/lens"
+# v0.2.3 followup: tauri-action `--target ${{ matrix.target }}` writes
+# the binary to `src-tauri/target/<TARGET>/release/lens` (rather than
+# the host-native `src-tauri/target/release/lens`). The smoke step
+# now consults $LENS_SMOKE_TARGET (set by release.yml's matrix env
+# block; fallback to the legacy path for direct invocations such as
+# `bash scripts/smoke-test.sh` from `ci.yml:linux-build` which builds
+# without `--target` and lands under the native path).
+LEGACY_BIN="src-tauri/target/release/lens"
 BUNDLE_DIR="src-tauri/target/release/bundle"
+TARGET_SUBDIR_BIN=""
+if [[ -n "${LENS_SMOKE_TARGET:-}" ]]; then
+  TARGET_SUBDIR_BIN="src-tauri/target/${LENS_SMOKE_TARGET}/release/lens"
+fi
+BIN="${TARGET_SUBDIR_BIN:-$LEGACY_BIN}"
 if [ -x "$BIN" ] || [ -f "$BIN" ]; then
   ls -la "$BIN"
   if [ -d "$BUNDLE_DIR" ]; then

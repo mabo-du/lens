@@ -5,6 +5,118 @@ All notable changes to LENS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-06-26
+
+Release-pipeline recovery cut. The v0.2.2 release workflow
+(`release.yml`) ran end-to-end on a `v0.2.2` tag push but the GitHub
+Release page was left in **draft** status because three of five jobs
+went red: PyPI publish (HTTP 400 `File already exists` because the
+sed-based version stamp patcher didn't fire on a non-`0.0.0` starting
+stamp), Ubuntu matrix cell (smoke Step 0.1 red because
+`scripts/smoke-test.sh` was hardcoded to the host-native binary path
+that `tauri-action --target ${{ matrix.target }}` does NOT use),
+Windows matrix cell (`pip install --upgrade pip` hitting PEP 668's
+externally-managed-environment gate from within the venv). v0.2.3
+fixes all four, ships the deferred IPC / typescript review fixes,
+and bumps the stamp so PyPI/Windows/Ubuntu jobs can all pass on
+clean tags without manual re-runs.
+
+### Fixed
+
+- **PyPI duplicate-filename collision on v0.2.2** — `.github/workflows
+  /release.yml`'s `Derive version from tag` step now uses a
+  `.*` blanket wildcard in the `sed` regex instead of the prior
+  `0\.0\.0` literal anchor. The previous regex stopped matching
+  after `python/pyproject.toml` was bumped to `0.2.1` in the v0.2.1
+  round, so the v0.2.2 publish step shipped a wheel still named
+  `lens_qda-0.2.1-py3-none-any.whl` — a filename PyPI rejected
+  with HTTP 400 ("File already exists"). Now any in-repo stamp
+  (or `0.0.0` placeholder if a future maintainer resets) rewrites
+  correctly under tag-time substitution.
+
+- **Windows venv pip self-upgrade (PEP 668)** — `scripts/build-sidecar
+  .sh` now invokes `python -m pip install --upgrade pip` and `python
+  -m pip install -r requirements.txt ...` rather than the bare
+  `pip` shim. PEP 668's externally-managed-environment gate stops
+  the Windows-latest runner's venv pip self-upgrade at the shim
+  layer with a confusing "To modify pip, please run ... python3.exe
+  -m pip" message. The `python -m pip` form forces the active venv
+  interpreter to resolve the module locally, sidestepping both the
+  Windows shim and PEP 668 paths in one move.
+
+- **Linux matrix cell smoke Step 0.1 binary path** —
+  `scripts/smoke-test.sh` Step 0.1 now consults `$LENS_SMOKE_TARGET`
+  before falling back to the legacy host-native
+  `src-tauri/target/release/lens` path. The release.yml matrix cell
+  sets `LENS_SMOKE_TARGET: ${{ matrix.target }}`, so the red-X'd
+  Step 0.1 from v0.2.2's `x86_64-unknown-linux-gnu` cell — which
+  actually built at `src-tauri/target/x86_64-unknown-linux-gnu
+  /release/lens` — now finds the binary. Direct
+  `bash scripts/smoke-test.sh` invocations (e.g. from `ci.yml:
+  linux-build`, which builds without `--target`) still work via
+  the fallback path.
+
+- **IPC type drift (`word` vs `text`)** — `src/ipc/transcribe.ts` now
+  declares `TranscribeDonePayload.transcriptSegments` rows as
+  `{ text, startMs, endMs, charOffset }`, matching the canonical
+  `TranscriptLine` shape in `src/ipc/audio.ts`. The v0.2.2 draft
+  used `word`, which drifted from `TranscriptLine.text` and would
+  have caused `useTranscriptIndex.findWordAtTime` to read
+  `.text = undefined` the moment the whisper.cpp sidecar started
+  emitting real transcripts.
+
+- **JSDoc lie in `useTranscriptIndex.ts`** — module-level comment
+  no longer claims the binary-search runs over `Float64Array`
+  (the actual storage is `number[]`).
+
+- **`AudioWaveform` import path** — uses the public-dist alias
+  `wavesurfer.js/plugins/regions` (resolves to the same ESM file
+  via the package-`exports` `./plugins/*` mapping) instead of the
+  internal `dist/plugins/regions.esm.js` path. Tree-shaking + bundle
+  fingerprinting stay stable across wavesurfer point releases that
+  repack the dist layout.
+
+- **`StatusBar` test hermeticity** — `computeDocsCoded` is now in
+  `src/components/workspace/statusBarLogic.ts` (pure: no React,
+  Zustand, or DOM imports). Both `StatusBar.tsx` and
+  `StatusBar.test.tsx` import from the new file. The unit test
+  no longer transitively loads the project/ui Zustand stores.
+
+## [0.2.2] - 2026-06-26
+
+*Note: This release was cut but its GitHub Release entry remained in
+draft (the matrix + PyPI failures prevented the promote-release job
+from running), so no published release / GitHub Release page is
+available for 0.2.2. The source-tree changes shipped under v0.2.2
+are present on `main` and are picked up by v0.2.3.*
+
+### Added
+
+- `src/components/audio/AudioWaveform.tsx` — wavesurfer.js@7.12.8
+  wrapper with regions plugin scaffold for time-range selection.
+  Tree-shaken out of the bundle until the v2 wire-up passes a real
+  audio source from Rust IPC.
+- `src/components/workspace/StatusBar.tsx` — cheap live counters
+  footer (Phase 6.4): total annotations, X / Y docs-coded, active
+  doc word count. Pulls via narrow Zustand selectors; only the
+  `computeDocsCoded` helper is exported for the vitest helper
+  (extracted to `statusBarLogic.ts` in v0.2.3).
+- `src/hooks/useTranscriptIndex.ts` — O(log n) binary-search
+  helpers + `useTranscriptIndex` React hook for transcript sync
+  helpers (`findWordAtTime`, `findWordsInTimeRange`).
+- `src/ipc/transcribe.ts` — typed listener surface for the
+  whisper.cpp sidecar (event channels: `audio://job/{id}/progress`,
+  `/done`, `/error`). Runtime wiring lands in v2.
+- `scripts/lint-i18n.sh` — CI gate ensuring every English `msgid`
+  exists in every non-English `.po` file (cross-locale translation
+  parity). Wired into `ci.yml:typescript` job as the first lint step.
+- `src/locales/en/messages.po` + `src/locales/es/messages.po` —
+  initial gettext catalogues mirroring the Phase 9 LinguiJS
+  extraction target.
+- `src/utils/icr.test.ts` — vitest round-trip coverage for the
+  Cohen's kappa + binary vector expansion techniques used by the
+  upcoming inter-coder reliability dashboard.
+
 ## [0.2.1] - 2026-06-26
 
 Patch release dedicated to **release-pipeline reliability**. The v0.2.0

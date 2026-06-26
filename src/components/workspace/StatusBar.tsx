@@ -20,35 +20,7 @@ import { Hash, FileText, Activity } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
 import { useUiStore } from '@/store/uiStore';
 import type { DocumentRecord } from '@/ipc/documents';
-import type { AnnotationRecord } from '@/ipc/annotations';
-
-/**
- * Count distinct documents in `documents` that have at least one
- * annotation in `annotations` matching by `documentId`.
- *
- * Pure function exported specifically so the vitest suite can pin its
- * semantics without spinning up React.
- *
- * O(n + m): one Set membership write per annotation, one Set lookup per
- * document. For a 200-document / 5,000-annotation project this is
- * well under a millisecond on commodity hardware; for V1 with smaller
- * projects the cost is invisible. If a future corpus scales past
- * ~50k annotations, switch the in-memory pass to a precomputed
- * `Set<string>` kept in the ui store and updated incrementally on
- * every `addAnnotation` / `removeAnnotation`.
- */
-export function computeDocsCoded(
-  documents: DocumentRecord[],
-  annotations: AnnotationRecord[],
-): number {
-  const annotatedDocIds = new Set<string>();
-  for (const a of annotations) annotatedDocIds.add(a.documentId);
-  let n = 0;
-  for (const d of documents) {
-    if (annotatedDocIds.has(d.id)) n += 1;
-  }
-  return n;
-}
+import { computeDocsCoded } from './statusBarLogic';
 
 export function StatusBar() {
   const activeProject = useProjectStore((s) => s.activeProject);

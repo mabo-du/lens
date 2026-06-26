@@ -42,8 +42,16 @@ export interface TranscribeProgressPayload {
 /** Emitted by the sidecar on successful completion. */
 export interface TranscribeDonePayload {
   jobId: string;
+  // v0.2.3 followup: align `transcriptSegments` row shape with the
+  // canonical `TranscriptLine` from `@/ipc/audio` (which carries a
+  // `text` field). The v0.2.2 draft used `word` here, which drifted
+  // from `TranscriptLine.text` and would have caused
+  // `findWordAtTime` (from `useTranscriptIndex`) to read `.text =
+  // undefined` once the v2 whisper.cpp sidecar started emitting real
+  // transcripts. Each segment is a sentence-/line-level window rather
+  // than a per-word token; downstream code already keys on `.text`.
   transcriptSegments: Array<{
-    word: string;
+    text: string;
     startMs: number;
     endMs: number;
     charOffset: number;

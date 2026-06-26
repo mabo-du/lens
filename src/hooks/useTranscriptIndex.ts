@@ -12,7 +12,7 @@
  *      `getWordsInTimeRange(selectionStartMs, selectionEndMs)`.
  *
  * Memory budget: ~2 MB per open transcript at 50k words (32 bytes/row).
- * No library dependencies — plain binary search over `Float64Array`.
+ * No library dependencies — plain binary search over `number[]`.
  */
 
 import { useCallback, useMemo } from 'react';

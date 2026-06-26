@@ -50,8 +50,19 @@ else
 fi
 
 echo "Installing pinned pdfplumber + PyInstaller from $SIDECAR_DIR/requirements.txt..."
-pip install --quiet --upgrade pip
-pip install --quiet -r "$SIDECAR_DIR/requirements.txt" pyinstaller
+# v0.2.3 followup: use `python -m pip` instead of bare `pip` in the
+# venv. On Windows-latest runners, `pip.exe` resolves to the *pre-venv*
+# shim even after `Scripts/activate` is sourced, and pip self-upgrade
+# via the global site-packages shim hits PEP 668's
+# externally-managed-environment gate ("ERROR: To modify pip, please
+# run the following command: python3.exe -m pip install --upgrade pip").
+# Calling `python -m pip install` forces the active venv interpreter
+# to resolve the module locally, sidestepping both Windows shim and
+# PEP 668 paths. Bare `pip install -r requirements.txt` had the same
+# exposure (a transient pip mirror bump can hit PEP 668 too), so we
+# apply the same prefix to both invocations.
+"$PYTHON_CMD" -m pip install --quiet --upgrade pip
+"$PYTHON_CMD" -m pip install --quiet -r "$SIDECAR_DIR/requirements.txt" pyinstaller
 
 echo "Compiling sidecar binary for target $TARGET..."
 cd "$SIDECAR_DIR"
