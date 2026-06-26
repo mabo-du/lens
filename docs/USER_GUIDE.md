@@ -23,7 +23,7 @@ A screenshot-rich tutorial that walks every LENS surface from first launch to a 
 - [15. Collaboration lock](#collaboration-lock)
 - [16. Python CLI (`lens-qda`)](#python-cli-lens-qda)
 - [17. Keyboard shortcuts](#keyboard-shortcuts)
-- [18. Troubleshooting](#troubleshooting)
+- [18. Troubleshooting](#troubleshooting) _(anchor uses heading slug `troubleshooting` — the prev `#18-troubleshooting` form breaks external links)_
 
 ---
 
@@ -83,7 +83,7 @@ The image coder mounts when you click an `.png` / `.jpg` document in the rail:
 
 ![image viewer landing — toolbar pill toggle, code picker, fresh canvas](assets/screenshots/01-landing.png)
 
-> **Fixtures vs. real data:** the screenshots in this guide are captured from the Playwright fixture (`tests/e2e/fixture/`), which seeds a single code named **`Test Code`** and a single transparent 256×256 image. In a real session you'll have a multi-code codebook (each code with a distinct colour button in the toolbar) and your actual imported image. The interaction model is identical regardless of how many codes or how big the image.
+> **Fixtures vs. real data:** the screenshots in this guide are captured from the Playwright fixture (`tests/e2e/fixture/`), which seeds **3 codes** (**`Test Code`** — the active toolbar button for the captured annotation + **Theme** and **Identity** — visible but inactive in the toolbar) and a single transparent 256×256 image. In a real session you'll have a multi-code codebook drawn from your actual project's code tree and your imported image. The interaction model is identical regardless of how many codes or how big the image.
 
 (Note: the histogram collapsed on the canvas is intentional — the Konva Stage renders 256×256 by default; the actual image will be at its native intrinsic dims.)
 
@@ -240,8 +240,6 @@ TopNav → **Export** popover exposes the exporter registry:
 - **CSV (annotations)** — flat table with columns: `document_path`, `start`, `end`, `code_name`, `code_color`, `memo`. Sortable in Excel.
 - **HTML report** — printable narrative; reads the same closure table but renders a per-code chapter with the coded segments and any attached memos. Print → PDF for a paper artifact for your IRB.
 
-> **macOS unsigned-build Gatekeeper note:** until `APPLE_ID` / `APPLE_PASSWORD` / `APPLE_TEAM_ID` / `ASC_API_KEY` are provisioned (see [README § Release Process — Apple code signing](../README.md#apple-code-signing--notarisation-prerequisites)), macOS builds are unsigned. First launch triggers Gatekeeper "can't be opened because the developer cannot be verified". Workaround for one-time launches: `xattr -cr /Applications/LENS.app` from a terminal. The signed-and-notarised `.dmg` ships once the secrets are configured.
-
 Plugin registry in `src/export/index.ts` exposes an `ExportedPayload` API so alternative exporters (REFI-QDA compressed, DEDUCE, MAXQDA XML, etc.) plug in without touching core.
 
 ## 13. Backup + restore
@@ -319,7 +317,9 @@ If you want to use the same script from a non-PDF corpus, `lens-qda extract` acc
 | **Enter** (polygon mode) | Commit the in-flight polygon (≥3 vertices required) |
 | **Right-click** (canvas / image / annotation) | Open the action Dialog (region menu / annotation memo / code-tree menu) |
 
-## 18. Troubleshooting
+## Troubleshooting
+
+> _Note: numbered 18 in the table of contents above; heading slugified to `troubleshooting` so external links (e.g. `README.md` → `docs/USER_GUIDE.md#troubleshooting`) keep resolving._
 
 ### Image viewer canvas blank?
 
@@ -353,6 +353,17 @@ sudo apt-get install -y libfuse2 liblzma-dev
 ```
 
 If you're building locally, replicate these yourself.
+
+### macOS Gatekeeper blocks the unsigned build
+
+Until `APPLE_ID` / `APPLE_PASSWORD` / `APPLE_TEAM_ID` / `ASC_API_KEY` are provisioned (see [README § Release Process — Apple code signing](../README.md#apple-code-signing--notarisation-prerequisites)), macOS builds are unsigned. First launch triggers **Gatekeeper** "can't be opened because the developer cannot be verified". One-time workaround from a terminal:
+
+```bash
+# strips the quarantine xattr so Gatekeeper stops blocking the launch
+xattr -cr /Applications/LENS.app
+```
+
+The signed-and-notarised `.dmg` ships once the Apple-secrets onboarding run (`docs/onboarding-apple-developer.md`) is complete and `npx tauri build` runs inside a release-tag matrix.
 
 ### Gate failures
 

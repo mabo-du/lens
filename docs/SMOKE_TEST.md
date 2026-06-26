@@ -75,7 +75,7 @@ Omit the variable to write to the default `tests/fixtures/smoke/` tree.
 
 | # | Action | Expected | Pass | Notes |
 |---|---|---|---|---|
-| 0.1 | `cargo tauri build` (release) | Command exits 0. Bundle exists under `src-tauri/target/release/bundle/`. | ☐ | |
+| 0.1 | `cargo tauri build` (release) | Command exits 0. Bundle exists under `src-tauri/target/release/bundle/` (full installers) **OR** binary exists at `src-tauri/target/release/lens` (binary-only `--no-bundle` mode is acceptable). | ☐ | |
 | 0.2 | Launch the installed app | Window appears with LENS empty-state screen (or project list). No DevTools console errors. | ☐ | |
 
 ### Phase 5.1: Project creation
