@@ -38,7 +38,7 @@ exporting the code-signing certificate, and provisioning the seven
 GitHub-Actions secrets required to ship notarised LENS macOS releases via
 `release.yml`. **Audience: a new contributor doing this for the first time, on
 their own Mac, outside of CI.** If you only need a refresher on secret rotation
-or panic-mode debugging, see `docs/release-secrets.md` instead.
+or panic-mode debugging, see `docs/release-credentials-catalog.md` instead.
 
 ## Prerequisites
 
@@ -50,7 +50,7 @@ or panic-mode debugging, see `docs/release-secrets.md` instead.
 | A GitHub repo admin (or write+secrets scope) on the upstream `mabo-du/lens` repository. | — | — |
 | ~30 minutes for the procedure end-to-end after enrolment approval. | — | ~30 min. |
 
-> **Note:** LENS currently distributes a *developer-id-notarised* `.app` bundle (Tauri defaults, no Mac App Store). If we later move to App Store distribution, the certificate type changes (`Apple Distribution` instead of `Developer ID Application`); see `docs/release-secrets.md` and the `### Apple notarisation` subsection for the rotation impact.
+> **Note:** LENS currently distributes a *developer-id-notarised* `.app` bundle (Tauri defaults, no Mac App Store). If we later move to App Store distribution, the certificate type changes (`Apple Distribution` instead of `Developer ID Application`); see `docs/release-credentials-catalog.md` and the `### Apple notarisation` subsection for the rotation impact.
 
 ## Step 1 — Create / verify Apple ID
 
@@ -174,7 +174,7 @@ secret**, paste the value, save. Do not commit any of these values.
 
 | GH secret | Value |
 |-----------|-------|
-| `TAURI_SIGNING_PRIVATE_KEY` | stdout of `scripts/generate-signing-key.sh` (the `*.key` file's contents). See `docs/release-secrets.md`. |
+| `TAURI_SIGNING_PRIVATE_KEY` | stdout of `scripts/generate-signing-key.sh` (the `*.key` file's contents). See `docs/release-credentials-catalog.md`. |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | the passphrase used when you ran the scaffolder |
 | `APPLE_CERTIFICATE` | full single-line contents of `lens-dev-id.p12.b64` |
 | `APPLE_CERTIFICATE_PASSWORD` | the `.p12` export password you set in Step 4 |
@@ -283,7 +283,7 @@ Windows, macOS Intel, macOS Apple Silicon). macOS jobs will:
 
 5. **Cert rotated but GH secret not.** Symptom: signed releases in
    `Releases/` fail signature verification for previously-installed users.
-   **Fix:** see `### Apple notarisation` in `docs/release-secrets.md` — the
+   **Fix:** see `### Apple notarisation` in `docs/release-credentials-catalog.md` — the
    Apple cert rotation workflow is *separate* from the Tauri signing key
    rotation; track both with `gh secret list -R mabo-du/lens`.
 
@@ -313,7 +313,7 @@ Windows, macOS Intel, macOS Apple Silicon). macOS jobs will:
 
 ## See also
 
-- **`docs/release-secrets.md`** — full secrets catalogue + rotation runbook
+- **`docs/release-credentials-catalog.md`** — full secrets catalogue + rotation runbook
   (sister document).
 - **`scripts/generate-signing-key.sh`** — non-interactive Tauri signer
   scaffolder (CI/dry-run variant only; for local interactive use, run

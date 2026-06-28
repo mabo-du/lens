@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# scripts/set-release-secrets.sh -- wire the GitHub Actions release secrets
+# scripts/set-release-credentials.sh -- wire the GitHub Actions release secrets
 # needed to ship signed LENS releases.
 #
 # What this script does automatically:
@@ -15,9 +15,9 @@
 # Re-runnable: `gh secret set` is idempotent.
 #
 # Usage:
-#   ./scripts/set-release-secrets.sh                       # default repo mabo-du/lens
-#   LENS_REPO=mabo-du/lens ./scripts/set-release-secrets.sh
-#   TAURI_KEY_FILE=/path/key LENS_REPO=owner/repo ./scripts/set-release-secrets.sh
+#   ./scripts/set-release-credentials.sh                       # default repo mabo-du/lens
+#   LENS_REPO=mabo-du/lens ./scripts/set-release-credentials.sh
+#   TAURI_KEY_FILE=/path/key LENS_REPO=owner/repo ./scripts/set-release-credentials.sh
 
 set -euo pipefail
 

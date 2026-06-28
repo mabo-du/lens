@@ -79,6 +79,13 @@ base_library.zip
 .env*
 !.env.example
 
+# Secret/credential file extensions (prevent accidental commits)
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+
 # ---- Playwright + CI artifacts ----
 # Generated on every Playwright run via globalSetup/globalTeardown
 # (see tests/e2e/global-setup.mjs). Recreate locally with
