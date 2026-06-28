@@ -5,6 +5,32 @@ All notable changes to LENS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.5] - 2026-06-29
+
+PyPI re-publication cut. The v0.2.4 tag push triggered the release pipeline
+successfully (all 3 desktop installers built and published) but the PyPI
+publish step failed because the previous v0.2.4 tag attempt had already
+uploaded `lens_qda-0.2.4-py3-none-any.whl` to PyPI, and PyPI permanently
+prohibits filename reuse. This cut bumps the version stamp to 0.2.5 for a
+clean wheel filename.
+
+### Fixed
+
+- **PyPI publication of `lens-qda`** — version bumped from 0.2.4 to 0.2.5
+  across all stamp files (`package.json`, `tauri.conf.json`, `Cargo.toml`,
+  `python/pyproject.toml`, `python/lens_qda/__init__.py`). The v0.2.5 tag
+  produces `lens_qda-0.2.5-py3-none-any.whl` which has never been uploaded
+  to PyPI.
+
+### Notes
+
+- **Desktop installers unchanged from v0.2.4** — the Rust/React/TypeScript
+  source is identical; only the version stamp changed. Users who installed
+  v0.2.4 from the GitHub Release page already have the correct binaries.
+- **PyPI cleanup:** the stale `lens-qda==0.2.4` (from the previous tag
+  attempt) should be yanked at https://pypi.org/project/lens-qda/0.2.4/
+  once v0.2.5 is published. The wheel code is functionally identical.
+
 ## [0.2.4] - 2026-06-29
 
 Security posture hardening cut. The `aidevops security audit` assessment

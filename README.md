@@ -16,7 +16,7 @@
 [![GitHub repository](https://img.shields.io/badge/github-repository-181717.svg?logo=github)](https://github.com/mabo-du/lens)
 <!-- aidevops:badges:end -->
 
-> **Latest release: v0.2.4 (2026-06-29)** — security posture hardening cut.
+> **Latest release: v0.2.5 (2026-06-29)** — PyPI re-publication cut.
 > Addresses all findings from the `aidevops security audit`: patches esbuild
 > transitive dependency (GHSA-g7r4-m6w7-qqqr), creates `SECURITY.md` with a
 > vulnerability reporting policy, hardens `.gitignore` for secret-file extensions,

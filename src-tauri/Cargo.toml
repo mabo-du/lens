@@ -1,6 +1,6 @@
 [package]
 name = "lens"
-version = "0.2.4"
+version = "0.2.5"
 description = "A Tauri App"
 authors = ["Mark Bouck"]
 edition = "2021"
