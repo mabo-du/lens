@@ -1,5 +1,21 @@
 # LENS
 
+<!-- aidevops:badges:start -->
+<!-- managed by aidevops badges; edit the template, not this block -->
+<!-- Build & Quality Status -->
+[![GitHub Actions](https://github.com/mabo-du/lens/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mabo-du/lens/actions/workflows/ci.yml)
+
+<!-- License & Legal -->
+[![License](https://img.shields.io/badge/license-see%20file-yellow.svg)](https://github.com/mabo-du/lens/blob/main/LICENSE)
+
+<!-- Repository Metrics -->
+[![Lines of code](https://raw.githubusercontent.com/mabo-du/lens/main/.github/badges/loc-total.svg)](https://github.com/mabo-du/lens)
+[![Languages by lines of code](https://raw.githubusercontent.com/mabo-du/lens/main/.github/badges/loc-languages.svg)](https://github.com/mabo-du/lens)
+
+<!-- Project Links -->
+[![GitHub repository](https://img.shields.io/badge/github-repository-181717.svg?logo=github)](https://github.com/mabo-du/lens)
+<!-- aidevops:badges:end -->
+
 > **Latest release: v0.2.4 (2026-06-29)** — security posture hardening cut.
 > Addresses all findings from the `aidevops security audit`: patches esbuild
 > transitive dependency (GHSA-g7r4-m6w7-qqqr), creates `SECURITY.md` with a

@@ -124,3 +124,9 @@ __pycache__/
 .python-venv/
 # modern PEP 660 editable-install pattern (setuptools >=64)
 __editable__/
+
+# aidevops runtime artifacts
+.agents/loop-state/
+.agents/tmp/
+.agents/memory/
+.beads
