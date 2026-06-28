@@ -1,11 +1,11 @@
 # LENS
 
-> **Latest release: v0.2.1 (2026-06-26)** — a patch release dedicated to
-> release-pipeline reliability. Smoke harness + 5 negative-corpus fixtures
-> + org-blocklist lift runbook + `verify-publish` GA gate. The v0.2.0 GA
-> matrix stalled under the GitHub org-level third-party-action blocklist;
-> v0.2.1 ships the tools future maintainers need to unblock it without
-> re-discovering the failure mode. See [CHANGELOG.md](CHANGELOG.md#021---2026-06-26).
+> **Latest release: v0.2.4 (2026-06-29)** — security posture hardening cut.
+> Addresses all findings from the `aidevops security audit`: patches esbuild
+> transitive dependency (GHSA-g7r4-m6w7-qqqr), creates `SECURITY.md` with a
+> vulnerability reporting policy, hardens `.gitignore` for secret-file extensions,
+> renames secret-scanner-noise files, and wires curated CHANGELOG release notes
+> into the publish workflow. See [CHANGELOG.md](CHANGELOG.md#024---2026-06-29).
 
 **Open-source qualitative data analysis for the desktop.**
 
@@ -24,6 +24,7 @@ LENS is a local-first, REFI-QDA-compatible research tool. Import documents (TXT,
 - [Testing](#testing)
 - [Release process](#release-process)
 - [Troubleshooting](#troubleshooting)
+- [Security](#security)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -226,7 +227,7 @@ For signed macOS bundles (`.dmg` of the notarised `.app`) the repo needs these s
 
 | Secret | Set via |
 |---|---|
-| `TAURI_SIGNING_PRIVATE_KEY` | `tauri signer generate --password` + `scripts/set-release-secrets.sh` |
+| `TAURI_SIGNING_PRIVATE_KEY` | `tauri signer generate --password` + `scripts/set-release-credentials.sh` |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Same flow |
 | `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`, `ASC_API_KEY` (base64) | Apple Developer Portal |
 
@@ -278,9 +279,15 @@ The Tesseract.js OCR worker (used by `DocumentList.tsx` if you've enabled image-
 
 `pip install lens-qda` on PEP 668 Python (>3.11 on some distros) — use `pipx install lens-qda` or a venv.
 
+## Security
+
+See [`SECURITY.md`](SECURITY.md) for vulnerability reporting, supported
+versions, and security-related configuration guidance (branch protection,
+secrets, dependency auditing).
+
 ## Contributing
 
-Issues and patches welcome — `github.com/mabo-du/lens`. The commit template is `<scope>(<area>): <subject>`; the prose mirror (commit message body) explains why. PRs go through `npm test && cd src-tauri && cargo test && npx playwright test` and one maintainer review.
+Issues and patches welcome — `github.com/mabo-du/lens`. See [`SECURITY.md`](SECURITY.md) for vulnerability reporting. The commit template is `<scope>(<area>): <subject>`; the prose mirror (commit message body) explains why. PRs go through `npm test && cd src-tauri && cargo test && npx playwright test` and one maintainer review.
 
 When you change a UI surface, re-run the Playwright E2E tests to verify:
 ```bash
