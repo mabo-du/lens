@@ -32,7 +32,7 @@ sqlx = { version = "0.9.0", features = ["sqlite", "runtime-tokio", "macros"] }
 # Pinned to 0.30.1 (= sqlx 0.9's transitive pin) so cargo's resolver
 # doesn't drift. CI MUST exercise the encryption path with
 # --features sqlcipher; default cargo test SILENTLY skips it.
-libsqlite3-sys = { version = "0.30.1" }
+libsqlite3-sys = { version = "0.37.0" }
 uuid = { version = "1.14.0", features = ["v4", "serde"] }
 tokio = { version = "1.52.3", features = ["sync", "macros", "rt-multi-thread"] }
 unicode-normalization = "0.1"
