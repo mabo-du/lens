@@ -41,7 +41,7 @@
     "prosemirror-transform": "^1.12.0",
     "prosemirror-view": "^1.41.9",
     "react": "^19.1.0",
-    "react-arborist": "^3.10.5",
+    "react-arborist": "^3.12.0",
     "react-dom": "^19.1.0",
     "react-konva": "^19.2.5",
     "react-resizable-panels": "^4.11.2",
