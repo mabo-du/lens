@@ -33,7 +33,7 @@
     "handlebars": "^4.7.9",
     "jszip": "^3.10.1",
     "konva": "^10.3.0",
-    "lucide-react": "^1.18.0",
+    "lucide-react": "^1.22.0",
     "next-themes": "^0.4.6",
     "pdfjs-dist": "^4.10.38",
     "prosemirror-model": "^1.25.9",
